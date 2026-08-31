@@ -26,7 +26,7 @@ set up. Runs hourly, triggered by `pg_cron` (see the
 4. **Set the function's secrets** (server-only — these never touch the app's
    own `.env`/bundle, they live in Supabase's Edge Function environment):
    ```
-   supabase secrets set SMTP_USER=loriksh12@gmail.com
+   supabase secrets set SMTP_USER=your-gmail-address@gmail.com
    supabase secrets set SMTP_APP_PASSWORD=<the 16-char app password>
    supabase secrets set CRON_SECRET=<any random string you make up>
    supabase secrets set APP_URL=http://localhost:3000
