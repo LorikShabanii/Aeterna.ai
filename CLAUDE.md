@@ -4,6 +4,18 @@ This file gives Claude Code the full context for building Aeterna. Read this
 before making changes. It reconciles the Lovable-generated landing page
 (design system to KEEP) with the fuller product concept (functionality to ADD).
 
+## Repo layout
+
+This repo is split into three top-level folders:
+
+- **`Desktop App/`** — the actual product (TanStack Start + Supabase,
+  Tauri-wrapped). Everything described below lives here — all paths in this
+  file (e.g. `src/routes/index.tsx`) are relative to `Desktop App/`, not the
+  repo root.
+- **`Mobile App/`** — not started (Phase 2, see Platform section below).
+- **`Landing Page/`** — not started; the public marketing/beta-signup site,
+  separate from the app's own in-app landing route.
+
 ## What exists already (do not rebuild)
 
 - **Stack**: TanStack Start, React 19, TypeScript, Tailwind CSS v4, shadcn/ui
@@ -17,8 +29,13 @@ before making changes. It reconciles the Lovable-generated landing page
   calendar, card, checkbox, dialog, dropdown-menu, form, input, select,
   sheet, sidebar, table, tabs, tooltip, and more — use these instead of
   building new primitives.
-- Currently the app is **landing-page only**. No auth, no database, no
-  vault logic, no file upload, no backend exists yet.
+- **Current build status**: Auth, `vault_items` (letters + file uploads),
+  Recipients, Heartbeat check-in, Recovery key, and the escalation
+  cron/email are built and wired to a real Supabase project — see
+  `supabase/README.md` for what's migrated. Not yet built: Handover portal,
+  the Tauri desktop shell itself (app still runs as a plain web app),
+  native biometric check-in, and the sealed-letter landing design hasn't
+  been extended into the app screens beyond `/` itself.
 
 ## What Lovable narrowed (important context)
 
@@ -126,7 +143,7 @@ Handover step.
   encrypt payloads/files with AES-256-GCM before upload.
 - Flag clearly in the UI (already done in the landing copy: "the courier
   never reads the letter") — keep this promise true in the implementation.
-
+ 
 ## Platform (MVP decision)
 
 **Desktop app, built with Tauri.** Wrap the existing React/Tailwind/shadcn
