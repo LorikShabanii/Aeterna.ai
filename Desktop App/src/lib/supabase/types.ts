@@ -59,6 +59,14 @@ export interface RecoveryKeyRow {
   used_at: string | null
 }
 
+export interface HandoverRow {
+  id: string
+  user_id: string
+  recipient_id: string
+  token_hash: string
+  created_at: string
+}
+
 export interface Database {
   // Required by @supabase/supabase-js's generic client machinery — without
   // it, every query result silently types as `never`. Matches what
@@ -175,6 +183,24 @@ export interface Database {
           key_hash?: string
           created_at?: string
           used_at?: string | null
+        }
+        Relationships: []
+      }
+      handovers: {
+        Row: HandoverRow
+        Insert: {
+          id?: string
+          user_id: string
+          recipient_id: string
+          token_hash: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          recipient_id?: string
+          token_hash?: string
+          created_at?: string
         }
         Relationships: []
       }

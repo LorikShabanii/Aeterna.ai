@@ -4,10 +4,11 @@
 // of this app.
 //
 // Tiers = days overdue past the check-in due date: 0 / 2 / 5 / 7+, matching
-// Day 0 / +2 / +5 / +7. Day +7 only emails the account owner a final
-// notice — it does NOT contact recipients or deliver the vault. Recipients
-// are never notified before the Handover portal exists (a separate, later
-// build step) per CLAUDE.md's "recipients are not confirmers" note.
+// Day 0 / +2 / +5 / +7. At Day +7, in addition to a final notice to the
+// owner, each recipient assigned to one of the owner's items gets a link
+// to a page that lists what they've been entrusted with — see
+// supabase/migrations/20260906000000_handover.sql for why this is
+// deliberately notification-only, not full content delivery.
 
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import nodemailer from 'npm:nodemailer@6'
@@ -19,7 +20,14 @@ interface Profile {
   last_reminder_tier: number | null
 }
 
+interface Recipient {
+  id: string
+  name: string
+  contact: string
+}
+
 const TIERS = [7, 5, 2, 0] as const // checked highest-first so we pick the furthest-along tier that applies
+const DAY_MS = 24 * 60 * 60 * 1000
 
 function tierForDaysOverdue(daysOverdue: number): number | null {
   for (const tier of TIERS) {
@@ -48,9 +56,75 @@ function subjectAndBody(tier: number, checkInUrl: string, recoverUrl: string) {
     default:
       return {
         subject: 'Aeterna — delivery countdown has ended',
-        body: `The check-in window has fully elapsed. (Note: automatic delivery to recipients is not yet implemented — this is a notice to you only.)`,
+        body: `The check-in window has fully elapsed and recipients you assigned items to have been notified.`,
       }
   }
+}
+
+async function hashToken(token: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token))
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
+}
+
+function generateToken(): string {
+  return Array.from(crypto.getRandomValues(new Uint8Array(24)))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
+}
+
+// deno-lint-ignore no-explicit-any
+async function notifyRecipients(supabase: any, transport: any, from: string, appUrl: string, ownerId: string, ownerEmail: string) {
+  const { data: links } = await supabase
+    .from('vault_item_recipients')
+    .select('recipient_id, vault_items!inner(user_id)')
+    .eq('vault_items.user_id', ownerId)
+
+  const recipientIds = [...new Set(((links ?? []) as Array<{ recipient_id: string }>).map((l) => l.recipient_id))]
+  if (recipientIds.length === 0) return 0
+
+  const { data: recipients } = await supabase
+    .from('recipients')
+    .select('id, name, contact')
+    .in('id', recipientIds)
+
+  let notified = 0
+
+  for (const recipient of (recipients ?? []) as Recipient[]) {
+    if (!recipient.contact.includes('@')) continue // phone contacts: SMS delivery isn't built
+
+    const { data: existing } = await supabase
+      .from('handovers')
+      .select('id')
+      .eq('user_id', ownerId)
+      .eq('recipient_id', recipient.id)
+      .maybeSingle()
+    if (existing) continue // already notified this recipient for this owner
+
+    const token = generateToken()
+    const { error: insertError } = await supabase
+      .from('handovers')
+      .insert({ user_id: ownerId, recipient_id: recipient.id, token_hash: await hashToken(token) })
+    if (insertError) {
+      console.error(`Failed to create handover for recipient ${recipient.id}:`, insertError)
+      continue
+    }
+
+    try {
+      await transport.sendMail({
+        from,
+        to: recipient.contact,
+        subject: 'Aeterna — something has been entrusted to you',
+        text: `${recipient.name}, ${ownerEmail} has entrusted you with something through Aeterna.\n\nView what's been left for you: ${appUrl}/handover/${token}\n\n(Note: this currently shows what was left for you — full content viewing is coming soon.)`,
+      })
+      notified += 1
+    } catch (sendErr) {
+      console.error(`Failed to email recipient ${recipient.id}:`, sendErr)
+    }
+  }
+
+  return notified
 }
 
 Deno.serve(async (req) => {
@@ -86,12 +160,11 @@ Deno.serve(async (req) => {
     const appUrl = Deno.env.get('APP_URL') ?? 'http://localhost:3000'
     const from = Deno.env.get('SMTP_USER')!
     let sent = 0
+    let recipientsNotified = 0
 
     for (const profile of (profiles ?? []) as Profile[]) {
-      const dueAt =
-        new Date(profile.last_check_in_at).getTime() +
-        profile.check_in_frequency_days * 24 * 60 * 60 * 1000
-      const daysOverdue = Math.floor((Date.now() - dueAt) / (24 * 60 * 60 * 1000))
+      const dueAt = new Date(profile.last_check_in_at).getTime() + profile.check_in_frequency_days * DAY_MS
+      const daysOverdue = Math.floor((Date.now() - dueAt) / DAY_MS)
 
       const tier = tierForDaysOverdue(daysOverdue)
       if (tier === null || tier === profile.last_reminder_tier) continue
@@ -110,10 +183,14 @@ Deno.serve(async (req) => {
         continue
       }
 
+      if (tier === 7) {
+        recipientsNotified += await notifyRecipients(supabase, transport, from, appUrl, profile.id, email)
+      }
+
       await supabase.from('profiles').update({ last_reminder_tier: tier }).eq('id', profile.id)
     }
 
-    return new Response(JSON.stringify({ checked: profiles?.length ?? 0, sent }), {
+    return new Response(JSON.stringify({ checked: profiles?.length ?? 0, sent, recipientsNotified }), {
       headers: { 'Content-Type': 'application/json' },
     })
   } catch (err) {

@@ -17,6 +17,7 @@ import { Route as SignupRouteImport } from './routes/signup'
 import { Route as AuthedRecipientsRouteImport } from './routes/_authed/recipients'
 import { Route as AuthedRecoveryKeyRouteImport } from './routes/_authed/recovery-key'
 import { Route as AuthedVaultRouteImport } from './routes/_authed/vault'
+import { Route as HandoverTokenRouteImport } from './routes/handover.$token'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -57,6 +58,11 @@ const AuthedVaultRoute = AuthedVaultRouteImport.update({
   path: '/vault',
   getParentRoute: () => AuthedRoute,
 } as any)
+const HandoverTokenRoute = HandoverTokenRouteImport.update({
+  id: '/handover/$token',
+  path: '/handover/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -66,6 +72,7 @@ export interface FileRoutesByFullPath {
   '/recipients': typeof AuthedRecipientsRoute
   '/recovery-key': typeof AuthedRecoveryKeyRoute
   '/vault': typeof AuthedVaultRoute
+  '/handover/$token': typeof HandoverTokenRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -75,6 +82,7 @@ export interface FileRoutesByTo {
   '/recipients': typeof AuthedRecipientsRoute
   '/recovery-key': typeof AuthedRecoveryKeyRoute
   '/vault': typeof AuthedVaultRoute
+  '/handover/$token': typeof HandoverTokenRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -86,6 +94,7 @@ export interface FileRoutesById {
   '/_authed/recipients': typeof AuthedRecipientsRoute
   '/_authed/recovery-key': typeof AuthedRecoveryKeyRoute
   '/_authed/vault': typeof AuthedVaultRoute
+  '/handover/$token': typeof HandoverTokenRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -97,6 +106,7 @@ export interface FileRouteTypes {
     | '/recipients'
     | '/recovery-key'
     | '/vault'
+    | '/handover/$token'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -106,6 +116,7 @@ export interface FileRouteTypes {
     | '/recipients'
     | '/recovery-key'
     | '/vault'
+    | '/handover/$token'
   id:
     | '__root__'
     | '/'
@@ -116,6 +127,7 @@ export interface FileRouteTypes {
     | '/_authed/recipients'
     | '/_authed/recovery-key'
     | '/_authed/vault'
+    | '/handover/$token'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -124,6 +136,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   RecoverRoute: typeof RecoverRoute
   SignupRoute: typeof SignupRoute
+  HandoverTokenRoute: typeof HandoverTokenRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -184,6 +197,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedVaultRouteImport
       parentRoute: typeof AuthedRoute
     }
+    '/handover/$token': {
+      id: '/handover/$token'
+      path: '/handover/$token'
+      fullPath: '/handover/$token'
+      preLoaderRoute: typeof HandoverTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -208,6 +228,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   RecoverRoute: RecoverRoute,
   SignupRoute: SignupRoute,
+  HandoverTokenRoute: HandoverTokenRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
