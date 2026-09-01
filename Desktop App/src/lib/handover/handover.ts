@@ -42,6 +42,11 @@ export interface HandoverItem {
   category: string | null
   encryptedPayload: string | null
   downloadUrl: string | null
+  // The real filename (with extension) — encoded as the storage path's
+  // last segment, same trick used on the owner's own vault page. Without
+  // it, a downloaded file has nothing to tell the OS what it is and looks
+  // like garbled text when opened (the exact bug already fixed once here).
+  fileName: string | null
 }
 
 export const getHandoverInfo = createServerFn({ method: 'GET' })
@@ -75,6 +80,7 @@ export const getHandoverInfo = createServerFn({ method: 'GET' })
 
       for (const row of rows ?? []) {
         let downloadUrl: string | null = null
+        let fileName: string | null = null
         if (row.encrypted_file_url) {
           // Owner-only Storage RLS means a signed URL is the only way a
           // recipient (no session at all) can fetch the encrypted bytes.
@@ -82,6 +88,7 @@ export const getHandoverInfo = createServerFn({ method: 'GET' })
             .from('vault-files')
             .createSignedUrl(row.encrypted_file_url, 60 * 10)
           downloadUrl = signed?.signedUrl ?? null
+          fileName = row.encrypted_file_url.split('/').pop() ?? null
         }
         items.push({
           title: row.title,
@@ -89,6 +96,7 @@ export const getHandoverInfo = createServerFn({ method: 'GET' })
           category: row.category,
           encryptedPayload: row.encrypted_payload,
           downloadUrl,
+          fileName,
         })
       }
     }

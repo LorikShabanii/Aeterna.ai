@@ -220,7 +220,7 @@ function HandoverItemCard({ item, vaultKey }: { item: HandoverItem; vaultKey: Cr
       const url = URL.createObjectURL(decrypted)
       const link = document.createElement('a')
       link.href = url
-      link.download = item.title
+      link.download = item.fileName ?? item.title
       link.click()
       URL.revokeObjectURL(url)
     } catch {
