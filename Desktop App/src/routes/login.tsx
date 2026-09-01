@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { z } from 'zod'
 import { getSupabaseBrowserClient } from '@/lib/supabase/client'
 import { ensureVaultKeyFromPassword } from '@/lib/crypto/ensure-vault-key'
+import { BiometricGate } from '@/components/biometric-gate'
 import { SealMark } from '@/components/seal-mark'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -21,6 +22,7 @@ export const Route = createFileRoute('/login')({ component: LoginPage })
 function LoginPage() {
   const navigate = useNavigate()
   const [formError, setFormError] = useState<string | null>(null)
+  const [awaitingBiometric, setAwaitingBiometric] = useState(false)
   const form = useForm<z.infer<typeof loginSchema>>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: '', password: '' },
@@ -35,7 +37,7 @@ function LoginPage() {
       return
     }
     await ensureVaultKeyFromPassword(supabase, values.password)
-    await navigate({ to: '/vault' })
+    setAwaitingBiometric(true)
   }
 
   return (
@@ -51,46 +53,52 @@ function LoginPage() {
             <CardDescription>Sign in to check in and manage your vault.</CardDescription>
           </CardHeader>
           <CardContent>
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                <FormField
-                  control={form.control}
-                  name="email"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Email</FormLabel>
-                      <FormControl>
-                        <Input type="email" autoComplete="email" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="password"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Password</FormLabel>
-                      <FormControl>
-                        <Input type="password" autoComplete="current-password" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                {formError ? <p className="text-sm text-destructive">{formError}</p> : null}
-                <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
-                  {form.formState.isSubmitting ? 'Signing in…' : 'Sign in'}
-                </Button>
-              </form>
-            </Form>
-            <p className="mt-4 text-center text-sm text-cool">
-              No account?{' '}
-              <Link to="/signup" className="text-ink underline underline-offset-4">
-                Sign up
-              </Link>
-            </p>
+            {awaitingBiometric ? (
+              <BiometricGate onDone={() => navigate({ to: '/vault' })} />
+            ) : (
+              <>
+                <Form {...form}>
+                  <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                    <FormField
+                      control={form.control}
+                      name="email"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Email</FormLabel>
+                          <FormControl>
+                            <Input type="email" autoComplete="email" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="password"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Password</FormLabel>
+                          <FormControl>
+                            <Input type="password" autoComplete="current-password" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    {formError ? <p className="text-sm text-destructive">{formError}</p> : null}
+                    <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
+                      {form.formState.isSubmitting ? 'Signing in…' : 'Sign in'}
+                    </Button>
+                  </form>
+                </Form>
+                <p className="mt-4 text-center text-sm text-cool">
+                  No account?{' '}
+                  <Link to="/signup" className="text-ink underline underline-offset-4">
+                    Sign up
+                  </Link>
+                </p>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>

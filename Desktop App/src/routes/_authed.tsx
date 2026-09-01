@@ -2,6 +2,7 @@ import { createFileRoute, Link, Outlet, redirect, useRouter } from '@tanstack/re
 import { useState } from 'react'
 import { getCurrentUser } from '@/lib/auth/session'
 import { checkIn, getCheckInStatus } from '@/lib/heartbeat/checkin'
+import { isTauriRuntime, requestBiometricVerification } from '@/lib/tauri/biometric'
 import { LogoutButton } from '@/components/logout-button'
 import { SealMark } from '@/components/seal-mark'
 import { Button } from '@/components/ui/button'
@@ -23,12 +24,29 @@ function AuthedLayout() {
   const status = Route.useLoaderData()
   const router = useRouter()
   const [pending, setPending] = useState(false)
+  const [checkInError, setCheckInError] = useState<string | null>(null)
 
   async function handleCheckIn() {
     setPending(true)
+    setCheckInError(null)
     try {
+      if (isTauriRuntime()) {
+        const result = await requestBiometricVerification(
+          "Confirm you're still here to check in to Aeterna",
+          {
+            unavailableHint:
+              "Windows Hello isn't set up on this device — add a PIN or fingerprint in Windows Settings, or push back your deadline from the recovery key page instead.",
+          },
+        )
+        if (!result.ok) {
+          setCheckInError(result.reason ?? 'Could not verify. Try again.')
+          return
+        }
+      }
       await checkIn()
       await router.invalidate()
+    } catch {
+      setCheckInError('Something went wrong. Try again.')
     } finally {
       setPending(false)
     }
@@ -92,6 +110,11 @@ function AuthedLayout() {
             {pending ? 'Checking in…' : 'Check in'}
           </Button>
         </div>
+        {checkInError ? (
+          <div className="mx-auto max-w-5xl px-6 pb-2.5">
+            <p className="text-sm text-destructive">{checkInError}</p>
+          </div>
+        ) : null}
       </div>
 
       <Outlet />

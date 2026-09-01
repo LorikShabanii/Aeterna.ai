@@ -68,9 +68,10 @@ export const checkIn = createServerFn({ method: 'POST' }).handler(async () => {
 
   if (error) throw new Error(error.message)
 
-  // 'biometric' stands in for this web check-in until the Tauri shell wraps
-  // it with a real OS prompt — CLAUDE.md's method enum only has the two
-  // values, and this is the same "I'm here" heartbeat action either way.
+  // Inside the Tauri shell this is only reached after a real OS biometric
+  // prompt succeeds (see src/lib/tauri/biometric.ts) — the server has no way
+  // to verify biometrics itself, so it trusts the client gate, same as it
+  // already trusts a plain button click in dev/web mode (no Tauri present).
   const { error: checkinError } = (await (
     supabase.from('checkins') as unknown as {
       insert: (values: {

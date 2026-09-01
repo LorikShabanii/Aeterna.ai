@@ -29,13 +29,26 @@ This repo is split into three top-level folders:
   calendar, card, checkbox, dialog, dropdown-menu, form, input, select,
   sheet, sidebar, table, tabs, tooltip, and more — use these instead of
   building new primitives.
-- **Current build status**: Auth, `vault_items` (letters + file uploads),
-  Recipients, Heartbeat check-in, Recovery key, and the escalation
-  cron/email are built and wired to a real Supabase project — see
-  `supabase/README.md` for what's migrated. Not yet built: Handover portal,
-  the Tauri desktop shell itself (app still runs as a plain web app),
-  native biometric check-in, and the sealed-letter landing design hasn't
-  been extended into the app screens beyond `/` itself.
+- **Current build status**: Auth, `vault_items` (letters + file uploads,
+  with a `category` field), Recipients, Heartbeat check-in, Recovery key,
+  the escalation cron/email, the Handover portal (recipient link + OTP
+  identity verification + escrow-based vault key unwrap + real
+  decrypt-and-download of assigned items — not just a notification), and
+  the Tauri desktop shell (packaged with a self-contained Bun-compiled
+  sidecar server, since TanStack Start needs a running server and can't
+  ship as static files) are all built and wired to a real Supabase
+  project — see `supabase/README.md` for what's migrated. The
+  sealed-letter design has been extended across the app screens (bigger
+  text, delete confirmations, a sealing animation on save). Native
+  biometric check-in is wired for Windows (Windows Hello via
+  `tauri-plugin-biometry`) — verified that the plugin bridge, ACL, and
+  the "not available" failure path all work correctly end-to-end, but the
+  actual success path (approving a live Windows Hello prompt) hasn't been
+  verified by a human yet, since no dev machine so far has had Windows
+  Hello enrolled. macOS (Touch ID) support from the same plugin is
+  installed but untested (no Mac in this dev loop). Not yet built: the
+  four differentiation features in
+  `docs/roadmap-differentiation-features.md` (not started).
 
 ## What Lovable narrowed (important context)
 
@@ -193,14 +206,21 @@ without extra infra.
 
 - Mobile app (Capacitor/iOS/Android).
 - OCR on scanned documents.
-- Cryptographic hashing/timestamping of scans and videos for
-  evidentiary/legal weight (needed before this is pitched as usable in an
-  actual property dispute).
-- Notary/witness co-signing flow for land-succession items.
 - Real government ID verification (Stripe Identity/Onfido).
 - Multi-language UI.
 - Paid-tier billing logic beyond gating custom cadence (full Stripe
   subscription management can follow once core flows work).
+
+## Planned next: competitive-differentiation features (not started)
+
+Four features that differentiate Aeterna from generic vault competitors by
+targeting the land/succession use case specifically — evidentiary hashing
+and timestamping of captured files, parcel-level land mapping, a
+notary/lawyer referral stub, and multi-witness co-signing at video-recording
+time. Full spec, schema sketches, and build order in
+`docs/roadmap-differentiation-features.md`. Build order matters — start
+with the hashing/timestamping feature, since the other three depend on the
+pattern it establishes.
 
 ## Accounts / integrations needed before building
 

@@ -5,8 +5,12 @@
   "windows": [
     "main"
   ],
+  "remote": {
+    "urls": ["http://localhost:3000/*"]
+  },
   "permissions": [
     "core:default",
+    "biometry:default",
     "shell:allow-execute",
     {
       "identifier": "shell:allow-execute",

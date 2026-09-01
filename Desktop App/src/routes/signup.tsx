@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { z } from 'zod'
 import { getSupabaseBrowserClient } from '@/lib/supabase/client'
 import { ensureVaultKeyFromPassword } from '@/lib/crypto/ensure-vault-key'
+import { BiometricGate } from '@/components/biometric-gate'
 import { SealMark } from '@/components/seal-mark'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -24,6 +25,7 @@ function SignupPage() {
   const navigate = useNavigate()
   const [formError, setFormError] = useState<string | null>(null)
   const [confirmationSent, setConfirmationSent] = useState(false)
+  const [awaitingBiometric, setAwaitingBiometric] = useState(false)
   const form = useForm<z.infer<typeof signupSchema>>({
     resolver: zodResolver(signupSchema),
     defaultValues: { email: '', password: '' },
@@ -38,10 +40,12 @@ function SignupPage() {
       return
     }
     // If email confirmation is off (Auth > Providers > Email), signUp
-    // returns a live session immediately; otherwise there's no session yet.
+    // returns a live session immediately; otherwise there's no session yet
+    // — the biometric-enrollment offer happens on their first login instead,
+    // once a session actually exists (see login.tsx).
     if (data.session) {
       await ensureVaultKeyFromPassword(supabase, values.password)
-      await navigate({ to: '/vault' })
+      setAwaitingBiometric(true)
     } else {
       setConfirmationSent(true)
     }
@@ -70,6 +74,8 @@ function SignupPage() {
                 </Link>
                 .
               </p>
+            ) : awaitingBiometric ? (
+              <BiometricGate onDone={() => navigate({ to: '/vault' })} />
             ) : (
               <>
                 <Form {...form}>
