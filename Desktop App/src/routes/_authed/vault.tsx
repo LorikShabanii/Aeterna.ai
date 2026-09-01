@@ -18,11 +18,24 @@ import { decryptText, decryptToBlob, encryptFile, encryptText } from '@/lib/cryp
 import { ensureVaultKeyFromPassword } from '@/lib/crypto/ensure-vault-key'
 import { getVaultKey } from '@/lib/crypto/session-key'
 import { getSupabaseBrowserClient } from '@/lib/supabase/client'
+import { useSealing } from '@/lib/use-sealing'
+import { SealingOverlay } from '@/components/sealing-overlay'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -211,29 +224,29 @@ function NewLetterForm({
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
   const [category, setCategory] = useState<VaultItemCategory | ''>('')
-  const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const { sealing, runSealed } = useSealing()
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    setPending(true)
     setError(null)
     try {
-      const encryptedPayload = await encryptText(vaultKey, body)
-      await createLetter({ data: { title, encryptedPayload, category: category || null } })
+      await runSealed(async () => {
+        const encryptedPayload = await encryptText(vaultKey, body)
+        await createLetter({ data: { title, encryptedPayload, category: category || null } })
+      })
       setTitle('')
       setBody('')
       setCategory('')
       onCreated()
     } catch {
       setError('Could not save that letter. Try again.')
-    } finally {
-      setPending(false)
     }
   }
 
   return (
     <Card className="torn">
+      {sealing ? <SealingOverlay label="Sealing your letter…" /> : null}
       <CardHeader>
         <CardTitle className="font-serif font-medium">Write a letter</CardTitle>
       </CardHeader>
@@ -262,8 +275,8 @@ function NewLetterForm({
             />
           </div>
           {error ? <p className="text-sm text-destructive">{error}</p> : null}
-          <Button type="submit" disabled={pending}>
-            {pending ? 'Sealing…' : 'Seal letter'}
+          <Button type="submit" disabled={sealing}>
+            Seal letter
           </Button>
         </form>
       </CardContent>
@@ -299,8 +312,8 @@ function UploadFileForm({
   const [type, setType] = useState<FileVaultType>('document')
   const [category, setCategory] = useState<VaultItemCategory | ''>('')
   const [file, setFile] = useState<File | null>(null)
-  const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const { sealing, runSealed } = useSealing()
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -309,40 +322,40 @@ function UploadFileForm({
       setError(`That doesn't look like a ${type} — pick a matching file or change the type.`)
       return
     }
-    setPending(true)
     setError(null)
     try {
-      const supabase = getSupabaseBrowserClient()
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-      if (!user) throw new Error('Not authenticated')
+      await runSealed(async () => {
+        const supabase = getSupabaseBrowserClient()
+        const {
+          data: { user },
+        } = await supabase.auth.getUser()
+        if (!user) throw new Error('Not authenticated')
 
-      const encryptedBlob = await encryptFile(vaultKey, file)
-      // The original filename (with extension) rides along in the storage
-      // path — storage.foldername() only looks at the segment before the
-      // last, so this doesn't change what the RLS policies check — and lets
-      // downloads restore the real extension instead of a bare UUID.
-      const storagePath = `${user.id}/${crypto.randomUUID()}/${file.name}`
-      const { error: uploadError } = await supabase.storage
-        .from('vault-files')
-        .upload(storagePath, encryptedBlob, { contentType: 'application/octet-stream' })
-      if (uploadError) throw uploadError
+        const encryptedBlob = await encryptFile(vaultKey, file)
+        // The original filename (with extension) rides along in the storage
+        // path — storage.foldername() only looks at the segment before the
+        // last, so this doesn't change what the RLS policies check — and lets
+        // downloads restore the real extension instead of a bare UUID.
+        const storagePath = `${user.id}/${crypto.randomUUID()}/${file.name}`
+        const { error: uploadError } = await supabase.storage
+          .from('vault-files')
+          .upload(storagePath, encryptedBlob, { contentType: 'application/octet-stream' })
+        if (uploadError) throw uploadError
 
-      await createFileItem({ data: { title, type, storagePath, category: category || null } })
+        await createFileItem({ data: { title, type, storagePath, category: category || null } })
+      })
       setTitle('')
       setFile(null)
       setCategory('')
       onCreated()
     } catch {
       setError('Could not upload that file. Try again.')
-    } finally {
-      setPending(false)
     }
   }
 
   return (
     <Card className="torn">
+      {sealing ? <SealingOverlay label="Sealing your file…" /> : null}
       <CardHeader>
         <CardTitle className="font-serif font-medium">Upload a file</CardTitle>
       </CardHeader>
@@ -399,8 +412,8 @@ function UploadFileForm({
             )}
           </div>
           {error ? <p className="text-sm text-destructive">{error}</p> : null}
-          <Button type="submit" disabled={pending || !file}>
-            {pending ? 'Sealing…' : 'Seal file'}
+          <Button type="submit" disabled={sealing || !file}>
+            Seal file
           </Button>
         </form>
       </CardContent>
@@ -564,15 +577,35 @@ function VaultItemCard({
         </div>
 
         <div className="mt-4 flex justify-end border-t border-mist/70 pt-3">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-destructive hover:text-destructive"
-            onClick={handleDelete}
-            disabled={pending || !vaultKey}
-          >
-            Delete
-          </Button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-destructive hover:text-destructive"
+                disabled={pending || !vaultKey}
+              >
+                Delete
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle className="font-serif">Delete "{item.title}"?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This can't be undone, and it will also be removed from anyone it was assigned to.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  onClick={handleDelete}
+                >
+                  Delete
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </CardContent>
     </Card>

@@ -7,12 +7,13 @@
     "frontendDist": "../dist/client",
     "devUrl": "http://localhost:3000",
     "beforeDevCommand": "bun run dev",
-    "beforeBuildCommand": "bun run build"
+    "beforeBuildCommand": "bun run build && node src-tauri/build-sidecar.mjs"
   },
   "app": {
     "windows": [
       {
         "title": "Aeterna",
+        "url": "http://localhost:3000",
         "width": 1200,
         "height": 800,
         "minWidth": 900,
@@ -34,6 +35,12 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
+    ],
+    "externalBin": [
+      "binaries/server"
+    ],
+    "resources": [
+      "resources/client"
     ],
     "android": {
       "debugApplicationIdSuffix": ".debug"

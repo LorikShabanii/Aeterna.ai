@@ -5,6 +5,17 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
 
 export const Route = createFileRoute('/_authed/recipients')({
   loader: () => listRecipients(),
@@ -142,9 +153,30 @@ function RecipientCard({
           <CardTitle className="font-serif text-base font-medium">{recipient.name}</CardTitle>
           <p className="text-sm text-muted-foreground">{recipient.contact}</p>
         </div>
-        <Button variant="ghost" size="sm" onClick={handleDelete} disabled={pending}>
-          Delete
-        </Button>
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button variant="ghost" size="sm" disabled={pending}>
+              Delete
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="font-serif">Remove "{recipient.name}"?</AlertDialogTitle>
+              <AlertDialogDescription>
+                They'll no longer receive any vault items assigned to them. This can't be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={handleDelete}
+              >
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </CardHeader>
     </Card>
   )

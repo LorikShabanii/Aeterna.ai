@@ -123,10 +123,24 @@
     border-color: var(--color-border);
   }
 
+  /* A meaningful chunk of who this app is for is older — every rem-based
+     size in the app scales up from this, so raising it once here beats
+     hunting down every text-sm. 18px (vs. the 16px default) is a
+     deliberately generous baseline for legibility over density. */
+  html {
+    font-size: 18px;
+  }
+
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
     font-family: var(--font-sans);
+    /* Soft, barely-there glow in the corners — calm, not neon. Sits behind
+       the flat paper color, doesn't fight it. */
+    background-image:
+      radial-gradient(1200px 700px at -10% -15%, oklch(0.61 0.035 235 / 10%), transparent 60%),
+      radial-gradient(1100px 700px at 110% -10%, oklch(0.56 0.04 60 / 8%), transparent 60%);
+    background-attachment: fixed;
   }
 }
 
