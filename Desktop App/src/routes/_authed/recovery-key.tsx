@@ -34,7 +34,7 @@ function RecoveryKeyPage() {
 
   return (
     <div className="mx-auto max-w-2xl p-8">
-      <h1 className="mb-2 text-2xl font-semibold">Recovery key</h1>
+      <h1 className="mb-2 font-serif text-2xl font-medium text-ink">Recovery key</h1>
       <p className="mb-6 text-sm text-muted-foreground">
         Your recovery key can only push back your check-in deadline — it cannot decrypt your
         vault. Store it offline (printed, or in a safe); anyone can redeem it from a public page
@@ -42,9 +42,9 @@ function RecoveryKeyPage() {
       </p>
 
       {revealedPhrase ? (
-        <Card>
+        <Card className="torn">
           <CardHeader>
-            <CardTitle>Save this now — it won't be shown again</CardTitle>
+            <CardTitle className="font-serif font-medium">Save this now — it won't be shown again</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="rounded-md border border-input bg-muted/40 p-4 font-mono text-sm leading-relaxed">
@@ -58,9 +58,11 @@ function RecoveryKeyPage() {
           </CardContent>
         </Card>
       ) : (
-        <Card>
+        <Card className="torn">
           <CardHeader>
-            <CardTitle>{status.hasActiveKey ? 'Active recovery key' : 'No recovery key yet'}</CardTitle>
+            <CardTitle className="font-serif font-medium">
+              {status.hasActiveKey ? 'Active recovery key' : 'No recovery key yet'}
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             {status.hasActiveKey ? (

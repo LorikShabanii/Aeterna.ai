@@ -48,7 +48,7 @@ function VaultPage() {
 
   return (
     <div className="mx-auto max-w-2xl p-8">
-      <h1 className="mb-6 text-2xl font-semibold">Your vault</h1>
+      <h1 className="mb-6 font-serif text-2xl font-medium text-ink">Your vault</h1>
 
       {vaultKey ? (
         <Tabs defaultValue="letter">
@@ -70,9 +70,9 @@ function VaultPage() {
       {vaultKey ? (
         <div className="mt-8 space-y-3">
           {items.length === 0 ? (
-            <Card>
+            <Card className="torn">
               <CardHeader>
-                <CardTitle>No vault items yet</CardTitle>
+                <CardTitle className="font-serif font-medium">No vault items yet</CardTitle>
               </CardHeader>
               <CardContent className="text-sm text-muted-foreground">
                 Write a letter or upload a file above — everything is encrypted in your browser
@@ -128,9 +128,9 @@ function UnlockVaultForm({ onUnlocked }: { onUnlocked: (key: CryptoKey) => void 
   }
 
   return (
-    <Card>
+    <Card className="torn">
       <CardHeader>
-        <CardTitle>Unlock your vault</CardTitle>
+        <CardTitle className="font-serif font-medium">Unlock your vault</CardTitle>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleUnlock} className="space-y-4">
@@ -188,9 +188,9 @@ function NewLetterForm({
   }
 
   return (
-    <Card>
+    <Card className="torn">
       <CardHeader>
-        <CardTitle>Write a letter</CardTitle>
+        <CardTitle className="font-serif font-medium">Write a letter</CardTitle>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -294,9 +294,9 @@ function UploadFileForm({
   }
 
   return (
-    <Card>
+    <Card className="torn">
       <CardHeader>
-        <CardTitle>Upload a file</CardTitle>
+        <CardTitle className="font-serif font-medium">Upload a file</CardTitle>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -454,7 +454,7 @@ function VaultItemCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">{item.title}</CardTitle>
+        <CardTitle className="font-serif text-base font-medium">{item.title}</CardTitle>
       </CardHeader>
       <CardContent className="text-sm text-muted-foreground">
         <p>

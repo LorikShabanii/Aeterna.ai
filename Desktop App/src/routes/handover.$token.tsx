@@ -2,6 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 import { getHandoverInfo, sendHandoverOtp, verifyHandoverOtp, type HandoverItem } from '@/lib/handover/handover'
 import { decryptText, decryptToBlob, importVaultKey } from '@/lib/crypto/vault-key'
+import { SealMark } from '@/components/seal-mark'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -18,12 +19,20 @@ export const Route = createFileRoute('/handover/$token')({
   component: HandoverPage,
   errorComponent: ({ error }) => (
     <div className="flex min-h-svh items-center justify-center bg-paper p-6 text-ink">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle>Link not found</CardTitle>
-          <CardDescription>{error instanceof Error ? error.message : 'This link is invalid.'}</CardDescription>
-        </CardHeader>
-      </Card>
+      <div className="w-full max-w-md">
+        <div className="mb-6 flex items-center justify-center gap-2.5">
+          <SealMark className="size-7" />
+          <span className="font-serif text-xl text-ink">Aeterna</span>
+        </div>
+        <Card className="torn">
+          <CardHeader>
+            <CardTitle className="font-serif text-2xl font-medium">Link not found</CardTitle>
+            <CardDescription>
+              {error instanceof Error ? error.message : 'This link is invalid.'}
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      </div>
     </div>
   ),
 })
@@ -60,9 +69,14 @@ function HandoverPage() {
 
   return (
     <div className="flex min-h-svh items-center justify-center bg-paper p-6 text-ink">
-      <Card className="w-full max-w-md">
+      <div className="w-full max-w-md">
+        <div className="mb-6 flex items-center justify-center gap-2.5">
+          <SealMark className="size-7" />
+          <span className="font-serif text-xl text-ink">Aeterna</span>
+        </div>
+        <Card className="torn">
         <CardHeader>
-          <CardTitle>For {recipientName}</CardTitle>
+          <CardTitle className="font-serif text-2xl font-medium">For {recipientName}</CardTitle>
           <CardDescription>
             {ownerEmail} has entrusted you with the following through Aeterna.
           </CardDescription>
@@ -91,7 +105,8 @@ function HandoverPage() {
             </p>
           ) : null}
         </CardContent>
-      </Card>
+        </Card>
+      </div>
     </div>
   )
 }

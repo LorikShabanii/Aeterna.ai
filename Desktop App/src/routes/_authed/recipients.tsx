@@ -17,7 +17,7 @@ function RecipientsPage() {
 
   return (
     <div className="mx-auto max-w-2xl p-8">
-      <h1 className="mb-2 text-2xl font-semibold">Recipients</h1>
+      <h1 className="mb-2 font-serif text-2xl font-medium text-ink">Recipients</h1>
       <p className="mb-6 text-sm text-muted-foreground">
         Recipients aren't contacted or asked to confirm anything — they only receive vault items
         after a missed check-in runs its course. Assign recipients to specific items on the{' '}
@@ -28,9 +28,9 @@ function RecipientsPage() {
 
       <div className="mt-8 space-y-3">
         {recipients.length === 0 ? (
-          <Card>
+          <Card className="torn">
             <CardHeader>
-              <CardTitle>No recipients yet</CardTitle>
+              <CardTitle className="font-serif font-medium">No recipients yet</CardTitle>
             </CardHeader>
             <CardContent className="text-sm text-muted-foreground">
               Add someone above — a name and an email address is all that's needed.
@@ -73,9 +73,9 @@ function NewRecipientForm({ onCreated }: { onCreated: () => void }) {
   }
 
   return (
-    <Card>
+    <Card className="torn">
       <CardHeader>
-        <CardTitle>Add a recipient</CardTitle>
+        <CardTitle className="font-serif font-medium">Add a recipient</CardTitle>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -139,7 +139,7 @@ function RecipientCard({
     <Card>
       <CardHeader className="flex-row items-center justify-between">
         <div>
-          <CardTitle className="text-base">{recipient.name}</CardTitle>
+          <CardTitle className="font-serif text-base font-medium">{recipient.name}</CardTitle>
           <p className="text-sm text-muted-foreground">{recipient.contact}</p>
         </div>
         <Button variant="ghost" size="sm" onClick={handleDelete} disabled={pending}>

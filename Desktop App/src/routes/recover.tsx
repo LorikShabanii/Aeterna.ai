@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useState } from 'react'
 import { redeemRecoveryKey } from '@/lib/recovery/recovery-key'
+import { SealMark } from '@/components/seal-mark'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -33,9 +34,14 @@ function RecoverPage() {
 
   return (
     <div className="flex min-h-svh items-center justify-center bg-paper p-6 text-ink">
-      <Card className="w-full max-w-md">
+      <div className="w-full max-w-md">
+        <div className="mb-6 flex items-center justify-center gap-2.5">
+          <SealMark className="size-7" />
+          <span className="font-serif text-xl text-ink">Aeterna</span>
+        </div>
+        <Card className="torn">
         <CardHeader>
-          <CardTitle>Push back a check-in deadline</CardTitle>
+          <CardTitle className="font-serif text-2xl font-medium">Push back a check-in deadline</CardTitle>
           <CardDescription>
             Paste the recovery phrase you saved when you set this up. This only delays delivery —
             it can't open or read anything in the vault.
@@ -70,7 +76,8 @@ function RecoverPage() {
             </form>
           )}
         </CardContent>
-      </Card>
+        </Card>
+      </div>
     </div>
   )
 }

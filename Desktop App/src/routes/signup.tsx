@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { z } from 'zod'
 import { getSupabaseBrowserClient } from '@/lib/supabase/client'
 import { ensureVaultKeyFromPassword } from '@/lib/crypto/ensure-vault-key'
+import { SealMark } from '@/components/seal-mark'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -47,69 +48,75 @@ function SignupPage() {
   }
 
   return (
-    <div className="flex min-h-svh items-center justify-center p-6">
-      <Card className="w-full max-w-sm">
-        <CardHeader>
-          <CardTitle>Create your vault</CardTitle>
-          <CardDescription>
-            Your password never leaves your device — it encrypts your vault locally.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {confirmationSent ? (
-            <p className="text-sm text-muted-foreground">
-              Check your email to confirm your account, then{' '}
-              <Link to="/login" className="underline underline-offset-4">
-                sign in
-              </Link>
-              .
-            </p>
-          ) : (
-            <>
-              <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                  <FormField
-                    control={form.control}
-                    name="email"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Email</FormLabel>
-                        <FormControl>
-                          <Input type="email" autoComplete="email" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="password"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Password</FormLabel>
-                        <FormControl>
-                          <Input type="password" autoComplete="new-password" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  {formError ? <p className="text-sm text-destructive">{formError}</p> : null}
-                  <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
-                    {form.formState.isSubmitting ? 'Creating vault…' : 'Create vault'}
-                  </Button>
-                </form>
-              </Form>
-              <p className="mt-4 text-center text-sm text-muted-foreground">
-                Already have a vault?{' '}
-                <Link to="/login" className="underline underline-offset-4">
-                  Sign in
+    <div className="flex min-h-svh items-center justify-center bg-paper p-6 text-ink">
+      <div className="w-full max-w-sm">
+        <div className="mb-6 flex items-center justify-center gap-2.5">
+          <SealMark className="size-7" />
+          <span className="font-serif text-xl text-ink">Aeterna</span>
+        </div>
+        <Card className="torn">
+          <CardHeader>
+            <CardTitle className="font-serif text-2xl font-medium">Create your vault</CardTitle>
+            <CardDescription>
+              Your password never leaves your device — it encrypts your vault locally.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {confirmationSent ? (
+              <p className="text-sm text-cool">
+                Check your email to confirm your account, then{' '}
+                <Link to="/login" className="text-ink underline underline-offset-4">
+                  sign in
                 </Link>
+                .
               </p>
-            </>
-          )}
-        </CardContent>
-      </Card>
+            ) : (
+              <>
+                <Form {...form}>
+                  <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                    <FormField
+                      control={form.control}
+                      name="email"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Email</FormLabel>
+                          <FormControl>
+                            <Input type="email" autoComplete="email" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="password"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Password</FormLabel>
+                          <FormControl>
+                            <Input type="password" autoComplete="new-password" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    {formError ? <p className="text-sm text-destructive">{formError}</p> : null}
+                    <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
+                      {form.formState.isSubmitting ? 'Creating vault…' : 'Create vault'}
+                    </Button>
+                  </form>
+                </Form>
+                <p className="mt-4 text-center text-sm text-cool">
+                  Already have a vault?{' '}
+                  <Link to="/login" className="text-ink underline underline-offset-4">
+                    Sign in
+                  </Link>
+                </p>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   )
 }

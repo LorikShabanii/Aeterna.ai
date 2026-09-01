@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { getCurrentUser } from '@/lib/auth/session'
 import { checkIn, getCheckInStatus } from '@/lib/heartbeat/checkin'
 import { LogoutButton } from '@/components/logout-button'
+import { SealMark } from '@/components/seal-mark'
 import { Button } from '@/components/ui/button'
 
 export const Route = createFileRoute('/_authed')({
@@ -40,7 +41,8 @@ function AuthedLayout() {
       <header className="border-b border-mist/70">
         <div className="mx-auto flex h-14 max-w-5xl flex-wrap items-center justify-between gap-x-6 gap-y-2 px-6">
           <div className="flex items-center gap-6">
-            <Link to="/vault" className="font-serif text-lg text-ink">
+            <Link to="/vault" className="flex items-center gap-2 font-serif text-lg text-ink">
+              <SealMark className="size-6" />
               Aeterna
             </Link>
             <nav className="flex items-center gap-5">
