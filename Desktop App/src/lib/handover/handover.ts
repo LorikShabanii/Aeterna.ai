@@ -2,6 +2,7 @@ import { createServerFn } from '@tanstack/react-start'
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
 import { getSupabaseAdminClient } from '@/lib/supabase/admin'
+import { sendEmail } from '@/lib/email/send'
 import type { HandoverRow, RecipientRow, VaultItemRow } from '@/lib/supabase/types'
 
 // Public, no-login (src/routes/handover.$token.tsx) — the token itself is
@@ -11,8 +12,26 @@ import type { HandoverRow, RecipientRow, VaultItemRow } from '@/lib/supabase/typ
 // supabase/functions/heartbeat-cron and supabase/migrations/20260907000000_vault_key_escrow.sql).
 type PgError = { message: string } | null
 
-function hashToken(token: string) {
-  return createHash('sha256').update(token.trim()).digest('hex')
+function hashValue(value: string) {
+  return createHash('sha256').update(value.trim()).digest('hex')
+}
+
+function maskEmail(email: string) {
+  const [local, domain] = email.split('@')
+  if (!domain || local.length <= 2) return email
+  return `${local[0]}${'*'.repeat(local.length - 2)}${local[local.length - 1]}@${domain}`
+}
+
+async function getHandoverByToken(admin: ReturnType<typeof getSupabaseAdminClient>, token: string) {
+  const { data: handover, error } = (await admin
+    .from('handovers')
+    .select('*')
+    .eq('token_hash', hashValue(token))
+    .maybeSingle()) as { data: HandoverRow | null; error: PgError }
+
+  if (error) throw new Error(error.message)
+  if (!handover) throw new Error('This link is invalid or has expired.')
+  return handover
 }
 
 const getHandoverInfoSchema = z.object({ token: z.string().min(1) })
@@ -29,15 +48,7 @@ export const getHandoverInfo = createServerFn({ method: 'GET' })
   .validator((data: unknown) => getHandoverInfoSchema.parse(data))
   .handler(async ({ data }) => {
     const admin = getSupabaseAdminClient()
-
-    const { data: handover, error } = (await admin
-      .from('handovers')
-      .select('*')
-      .eq('token_hash', hashToken(data.token))
-      .maybeSingle()) as { data: HandoverRow | null; error: PgError }
-
-    if (error) throw new Error(error.message)
-    if (!handover) throw new Error('This link is invalid or has expired.')
+    const handover = await getHandoverByToken(admin, data.token)
 
     const { data: recipient } = (await admin
       .from('recipients')
@@ -85,6 +96,100 @@ export const getHandoverInfo = createServerFn({ method: 'GET' })
     return {
       recipientName: recipient?.name ?? 'there',
       ownerEmail: owner?.user?.email ?? 'someone',
+      maskedContact: recipient ? maskEmail(recipient.contact) : null,
       items,
     }
+  })
+
+const sendOtpSchema = z.object({ token: z.string().min(1) })
+
+// Stubbed identity verification (CLAUDE.md build order step 7) — proves
+// *current* access to the recipient's inbox, on top of the token proving
+// they received the original email. See the migration for why this is on
+// top of, not instead of, the token itself.
+export const sendHandoverOtp = createServerFn({ method: 'POST' })
+  .validator((data: unknown) => sendOtpSchema.parse(data))
+  .handler(async ({ data }) => {
+    const admin = getSupabaseAdminClient()
+    const handover = await getHandoverByToken(admin, data.token)
+
+    const { data: recipient } = (await admin
+      .from('recipients')
+      .select('*')
+      .eq('id', handover.recipient_id)
+      .maybeSingle()) as { data: RecipientRow | null; error: PgError }
+    if (!recipient) throw new Error('Recipient not found.')
+
+    const code = String(Math.floor(100000 + Math.random() * 900000))
+    const updatePayload = {
+      otp_hash: hashValue(code),
+      otp_expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+      otp_attempts: 0,
+    }
+
+    const { error } = (await (
+      admin.from('handovers') as unknown as {
+        update: (values: typeof updatePayload) => { eq: (col: 'id', v: string) => PromiseLike<{ error: PgError }> }
+      }
+    )
+      .update(updatePayload)
+      .eq('id', handover.id)) as { error: PgError }
+    if (error) throw new Error(error.message)
+
+    await sendEmail(
+      recipient.contact,
+      'Aeterna — your verification code',
+      `Your verification code is ${code}. It expires in 10 minutes.`,
+    )
+
+    return { maskedContact: maskEmail(recipient.contact) }
+  })
+
+const verifyOtpSchema = z.object({ token: z.string().min(1), code: z.string().min(1) })
+
+export const verifyHandoverOtp = createServerFn({ method: 'POST' })
+  .validator((data: unknown) => verifyOtpSchema.parse(data))
+  .handler(async ({ data }) => {
+    const admin = getSupabaseAdminClient()
+    const handover = await getHandoverByToken(admin, data.token)
+
+    if (!handover.otp_hash || !handover.otp_expires_at) {
+      throw new Error('Request a code first.')
+    }
+    if (new Date(handover.otp_expires_at).getTime() < Date.now()) {
+      throw new Error('That code expired — request a new one.')
+    }
+    if (handover.otp_attempts >= 5) {
+      throw new Error('Too many attempts — request a new code.')
+    }
+
+    if (hashValue(data.code) !== handover.otp_hash) {
+      const { error } = (await (
+        admin.from('handovers') as unknown as {
+          update: (values: {
+            otp_attempts: number
+          }) => { eq: (col: 'id', v: string) => PromiseLike<{ error: PgError }> }
+        }
+      )
+        .update({ otp_attempts: handover.otp_attempts + 1 })
+        .eq('id', handover.id)) as { error: PgError }
+      if (error) throw new Error(error.message)
+      throw new Error('Incorrect code.')
+    }
+
+    // Consumed — a code can't be reused once it's worked.
+    const { error } = (await (
+      admin.from('handovers') as unknown as {
+        update: (values: {
+          otp_hash: null
+          otp_expires_at: null
+          otp_attempts: number
+        }) => { eq: (col: 'id', v: string) => PromiseLike<{ error: PgError }> }
+      }
+    )
+      .update({ otp_hash: null, otp_expires_at: null, otp_attempts: 0 })
+      .eq('id', handover.id)) as { error: PgError }
+    if (error) throw new Error(error.message)
+
+    return { verified: true }
   })

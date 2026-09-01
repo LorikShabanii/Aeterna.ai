@@ -65,6 +65,9 @@ export interface HandoverRow {
   recipient_id: string
   token_hash: string
   created_at: string
+  otp_hash: string | null
+  otp_expires_at: string | null
+  otp_attempts: number
 }
 
 export interface VaultKeyRow {
@@ -201,6 +204,9 @@ export interface Database {
           recipient_id: string
           token_hash: string
           created_at?: string
+          otp_hash?: string | null
+          otp_expires_at?: string | null
+          otp_attempts?: number
         }
         Update: {
           id?: string
@@ -208,6 +214,9 @@ export interface Database {
           recipient_id?: string
           token_hash?: string
           created_at?: string
+          otp_hash?: string | null
+          otp_expires_at?: string | null
+          otp_attempts?: number
         }
         Relationships: []
       }

@@ -1,8 +1,10 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
-import { getHandoverInfo, type HandoverItem } from '@/lib/handover/handover'
+import { getHandoverInfo, sendHandoverOtp, verifyHandoverOtp, type HandoverItem } from '@/lib/handover/handover'
 import { decryptText, decryptToBlob, importVaultKey } from '@/lib/crypto/vault-key'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 
 // Deliberately public and login-free, same as /recover — the token in the
@@ -34,7 +36,10 @@ function fromBase64(b64: string): Uint8Array<ArrayBuffer> {
 }
 
 function HandoverPage() {
-  const { recipientName, ownerEmail, items } = Route.useLoaderData()
+  const { token } = Route.useParams()
+  const { recipientName, ownerEmail, maskedContact, items } = Route.useLoaderData()
+
+  const [verified, setVerified] = useState(false)
 
   // Read after mount, not during render — the URL fragment never reaches
   // the server, so the SSR pass and first client render must agree there's
@@ -69,12 +74,17 @@ function HandoverPage() {
             <ul className="space-y-2">
               {items.map((item, i) => (
                 <li key={i}>
-                  <HandoverItemCard item={item} vaultKey={vaultKey} />
+                  <HandoverItemCard item={item} vaultKey={verified ? vaultKey : null} />
                 </li>
               ))}
             </ul>
           )}
-          {keyMissing ? (
+
+          {!verified && items.length > 0 ? (
+            <OtpGate token={token} maskedContact={maskedContact} onVerified={() => setVerified(true)} />
+          ) : null}
+
+          {verified && keyMissing ? (
             <p className="text-sm text-muted-foreground">
               This link doesn't include a decryption key, so content can't be shown here — only
               what was left for you.
@@ -82,6 +92,89 @@ function HandoverPage() {
           ) : null}
         </CardContent>
       </Card>
+    </div>
+  )
+}
+
+function OtpGate({
+  token,
+  maskedContact,
+  onVerified,
+}: {
+  token: string
+  maskedContact: string | null
+  onVerified: () => void
+}) {
+  const [sent, setSent] = useState(false)
+  const [code, setCode] = useState('')
+  const [pending, setPending] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleSend() {
+    setPending(true)
+    setError(null)
+    try {
+      await sendHandoverOtp({ data: { token } })
+      setSent(true)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not send a code. Try again.')
+    } finally {
+      setPending(false)
+    }
+  }
+
+  async function handleVerify(e: React.FormEvent) {
+    e.preventDefault()
+    setPending(true)
+    setError(null)
+    try {
+      await verifyHandoverOtp({ data: { token, code } })
+      onVerified()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not verify that code.')
+    } finally {
+      setPending(false)
+    }
+  }
+
+  return (
+    <div className="border-t border-mist/70 pt-4">
+      <p className="mb-3 text-xs font-medium uppercase tracking-wide text-cool">Verify it's you</p>
+      {!sent ? (
+        <div className="space-y-2">
+          <p className="text-sm text-muted-foreground">
+            To view or download anything, confirm you still have access to{' '}
+            {maskedContact ?? 'your email'}.
+          </p>
+          <Button size="sm" onClick={handleSend} disabled={pending}>
+            {pending ? 'Sending…' : 'Send verification code'}
+          </Button>
+        </div>
+      ) : (
+        <form onSubmit={handleVerify} className="space-y-3">
+          <div className="space-y-2">
+            <Label htmlFor="otp-code">6-digit code</Label>
+            <Input
+              id="otp-code"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              inputMode="numeric"
+              maxLength={6}
+              placeholder="123456"
+              required
+            />
+          </div>
+          <div className="flex items-center gap-3">
+            <Button type="submit" size="sm" disabled={pending}>
+              {pending ? 'Verifying…' : 'Verify'}
+            </Button>
+            <Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={handleSend}>
+              Resend code
+            </Button>
+          </div>
+        </form>
+      )}
+      {error ? <p className="mt-2 text-sm text-destructive">{error}</p> : null}
     </div>
   )
 }
