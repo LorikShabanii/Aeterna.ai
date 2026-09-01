@@ -1,6 +1,12 @@
 import { createFileRoute, useRouter } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
-import { createFileItem, createLetter, deleteVaultItem, listVaultItems } from '@/lib/vault/items'
+import {
+  createFileItem,
+  createLetter,
+  deleteVaultItem,
+  listVaultItems,
+  VAULT_ITEM_CATEGORIES,
+} from '@/lib/vault/items'
 import {
   assignRecipient,
   listRecipients,
@@ -158,6 +164,43 @@ function UnlockVaultForm({ onUnlocked }: { onUnlocked: (key: CryptoKey) => void 
   )
 }
 
+type VaultItemCategory = (typeof VAULT_ITEM_CATEGORIES)[number]
+
+const CATEGORY_LABELS: Record<VaultItemCategory, string> = {
+  personal: 'Personal',
+  financial: 'Financial',
+  land_succession: 'Land & property',
+}
+
+function CategorySelect({
+  id,
+  value,
+  onChange,
+}: {
+  id: string
+  value: VaultItemCategory | ''
+  onChange: (value: VaultItemCategory | '') => void
+}) {
+  return (
+    <div className="space-y-2">
+      <Label htmlFor={id}>Category (optional)</Label>
+      <Select value={value || 'none'} onValueChange={(v) => onChange(v === 'none' ? '' : (v as VaultItemCategory))}>
+        <SelectTrigger id={id} className="w-full">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="none">None</SelectItem>
+          {VAULT_ITEM_CATEGORIES.map((category) => (
+            <SelectItem key={category} value={category}>
+              {CATEGORY_LABELS[category]}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  )
+}
+
 function NewLetterForm({
   vaultKey,
   onCreated,
@@ -167,6 +210,7 @@ function NewLetterForm({
 }) {
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
+  const [category, setCategory] = useState<VaultItemCategory | ''>('')
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -176,9 +220,10 @@ function NewLetterForm({
     setError(null)
     try {
       const encryptedPayload = await encryptText(vaultKey, body)
-      await createLetter({ data: { title, encryptedPayload } })
+      await createLetter({ data: { title, encryptedPayload, category: category || null } })
       setTitle('')
       setBody('')
+      setCategory('')
       onCreated()
     } catch {
       setError('Could not save that letter. Try again.')
@@ -204,6 +249,7 @@ function NewLetterForm({
               required
             />
           </div>
+          <CategorySelect id="letter-category" value={category} onChange={setCategory} />
           <div className="space-y-2">
             <Label htmlFor="letter-body">Letter</Label>
             <Textarea
@@ -251,6 +297,7 @@ function UploadFileForm({
 }) {
   const [title, setTitle] = useState('')
   const [type, setType] = useState<FileVaultType>('document')
+  const [category, setCategory] = useState<VaultItemCategory | ''>('')
   const [file, setFile] = useState<File | null>(null)
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -282,9 +329,10 @@ function UploadFileForm({
         .upload(storagePath, encryptedBlob, { contentType: 'application/octet-stream' })
       if (uploadError) throw uploadError
 
-      await createFileItem({ data: { title, type, storagePath } })
+      await createFileItem({ data: { title, type, storagePath, category: category || null } })
       setTitle('')
       setFile(null)
+      setCategory('')
       onCreated()
     } catch {
       setError('Could not upload that file. Try again.')
@@ -329,6 +377,7 @@ function UploadFileForm({
               </SelectContent>
             </Select>
           </div>
+          <CategorySelect id="file-category" value={category} onChange={setCategory} />
           <div className="space-y-2">
             <Label htmlFor="file-input">File</Label>
             {file ? (
@@ -459,7 +508,7 @@ function VaultItemCard({
       <CardContent className="text-sm text-muted-foreground">
         <p>
           {item.type}
-          {item.category ? ` · ${item.category}` : ''}
+          {item.category ? ` · ${CATEGORY_LABELS[item.category as VaultItemCategory] ?? item.category}` : ''}
         </p>
         {item.encrypted_payload ? (
           revealed === null ? (

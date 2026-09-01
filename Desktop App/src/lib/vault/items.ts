@@ -54,11 +54,18 @@ async function insertVaultItem(insertPayload: Database['public']['Tables']['vaul
   if (error) throw new Error(error.message)
 }
 
+// Matches CLAUDE.md's data model examples ('personal', 'financial',
+// 'land_succession') — land/succession items are just vault_items with
+// this category, no separate schema, per that same section.
+export const VAULT_ITEM_CATEGORIES = ['personal', 'financial', 'land_succession'] as const
+const categorySchema = z.enum(VAULT_ITEM_CATEGORIES).nullish()
+
 const createLetterSchema = z.object({
   title: z.string().min(1, 'Title is required'),
   // encryptedPayload is produced client-side (see src/lib/crypto/vault-key.ts) —
   // the server only ever stores/returns ciphertext, never plaintext.
   encryptedPayload: z.string().min(1),
+  category: categorySchema,
 })
 
 export const createLetter = createServerFn({ method: 'POST' })
@@ -75,6 +82,7 @@ export const createLetter = createServerFn({ method: 'POST' })
       type: 'letter',
       title: data.title,
       encrypted_payload: data.encryptedPayload,
+      category: data.category ?? null,
     })
   })
 
@@ -85,6 +93,7 @@ const createFileItemSchema = z.object({
   // 'vault-files' Storage bucket (see src/routes/_authed/vault.tsx) —
   // the file's bytes never pass through the server.
   storagePath: z.string().min(1),
+  category: categorySchema,
 })
 
 export const createFileItem = createServerFn({ method: 'POST' })
@@ -101,6 +110,7 @@ export const createFileItem = createServerFn({ method: 'POST' })
       type: data.type,
       title: data.title,
       encrypted_file_url: data.storagePath,
+      category: data.category ?? null,
     })
   })
 
