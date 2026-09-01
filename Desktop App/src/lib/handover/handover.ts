@@ -5,10 +5,10 @@ import { getSupabaseAdminClient } from '@/lib/supabase/admin'
 import type { HandoverRow, RecipientRow, VaultItemRow } from '@/lib/supabase/types'
 
 // Public, no-login (src/routes/handover.$token.tsx) — the token itself is
-// the credential, same pattern as recovery-key redemption. Deliberately
-// shows only titles/type, never encrypted_payload/encrypted_file_url —
-// there is no way to decrypt on the recipient's behalf yet (see the note
-// in supabase/migrations/20260906000000_handover.sql).
+// the credential, same pattern as recovery-key redemption. The vault key
+// needed to decrypt what's returned here never passes through this
+// function — it rides in the email link's URL fragment instead (see
+// supabase/functions/heartbeat-cron and supabase/migrations/20260907000000_vault_key_escrow.sql).
 type PgError = { message: string } | null
 
 function hashToken(token: string) {
@@ -16,6 +16,14 @@ function hashToken(token: string) {
 }
 
 const getHandoverInfoSchema = z.object({ token: z.string().min(1) })
+
+export interface HandoverItem {
+  title: string
+  type: VaultItemRow['type']
+  category: string | null
+  encryptedPayload: string | null
+  downloadUrl: string | null
+}
 
 export const getHandoverInfo = createServerFn({ method: 'GET' })
   .validator((data: unknown) => getHandoverInfoSchema.parse(data))
@@ -45,14 +53,33 @@ export const getHandoverInfo = createServerFn({ method: 'GET' })
       .eq('recipient_id', handover.recipient_id)) as { data: { vault_item_id: string }[] | null }
 
     const itemIds = (links ?? []).map((l) => l.vault_item_id)
-    let items: Pick<VaultItemRow, 'title' | 'type' | 'category'>[] = []
+    const items: HandoverItem[] = []
+
     if (itemIds.length > 0) {
-      const { data } = (await admin
+      const { data: rows } = (await admin
         .from('vault_items')
         .select('*')
         .in('id', itemIds)
         .eq('user_id', handover.user_id)) as { data: VaultItemRow[] | null }
-      items = (data ?? []).map(({ title, type, category }) => ({ title, type, category }))
+
+      for (const row of rows ?? []) {
+        let downloadUrl: string | null = null
+        if (row.encrypted_file_url) {
+          // Owner-only Storage RLS means a signed URL is the only way a
+          // recipient (no session at all) can fetch the encrypted bytes.
+          const { data: signed } = await admin.storage
+            .from('vault-files')
+            .createSignedUrl(row.encrypted_file_url, 60 * 10)
+          downloadUrl = signed?.signedUrl ?? null
+        }
+        items.push({
+          title: row.title,
+          type: row.type,
+          category: row.category,
+          encryptedPayload: row.encrypted_payload,
+          downloadUrl,
+        })
+      }
     }
 
     return {

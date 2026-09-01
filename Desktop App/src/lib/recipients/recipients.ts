@@ -28,7 +28,10 @@ export const listRecipients = createServerFn({ method: 'GET' }).handler(async ()
 
 const createRecipientSchema = z.object({
   name: z.string().min(1, 'Name is required'),
-  contact: z.string().min(1, 'Contact is required'),
+  // Email-only for now — notifications go out over Gmail SMTP, and there's
+  // no SMS provider wired up, so a phone number here would silently never
+  // get delivered anything.
+  contact: z.string().email('Enter a valid email address'),
 })
 
 export const createRecipient = createServerFn({ method: 'POST' })

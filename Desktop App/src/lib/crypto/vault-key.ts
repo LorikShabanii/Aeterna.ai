@@ -24,7 +24,10 @@ export function generateSaltB64() {
   return toBase64(crypto.getRandomValues(new Uint8Array(16)))
 }
 
-export async function deriveVaultKey(password: string, saltB64: string): Promise<CryptoKey> {
+// The password-derived key is now a WRAPPING key, not the vault key itself
+// — see supabase/migrations/20260907000000_vault_key_escrow.sql. Kept
+// non-extractable; it only ever wraps/unwraps the real (random) vault key.
+async function derivePasswordWrappingKey(password: string, saltB64: string): Promise<CryptoKey> {
   const baseKey = await crypto.subtle.importKey(
     'raw',
     new TextEncoder().encode(password),
@@ -39,6 +42,34 @@ export async function deriveVaultKey(password: string, saltB64: string): Promise
     false,
     ['encrypt', 'decrypt'],
   )
+}
+
+export function generateRawVaultKey(): Uint8Array<ArrayBuffer> {
+  return crypto.getRandomValues(new Uint8Array(32))
+}
+
+export async function importVaultKey(raw: Uint8Array<ArrayBuffer>): Promise<CryptoKey> {
+  return crypto.subtle.importKey('raw', raw, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt'])
+}
+
+export async function wrapVaultKeyWithPassword(
+  rawVaultKey: Uint8Array<ArrayBuffer>,
+  password: string,
+  saltB64: string,
+): Promise<string> {
+  const wrappingKey = await derivePasswordWrappingKey(password, saltB64)
+  return toBase64(await encryptBytes(wrappingKey, rawVaultKey))
+}
+
+// Throws (AES-GCM auth tag mismatch) if the password is wrong — same
+// failure signal the old direct-derivation scheme gave.
+export async function unwrapVaultKeyWithPassword(
+  wrappedB64: string,
+  password: string,
+  saltB64: string,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const wrappingKey = await derivePasswordWrappingKey(password, saltB64)
+  return decryptBytes(wrappingKey, fromBase64(wrappedB64))
 }
 
 // iv is prefixed to the ciphertext so both stay one envelope.

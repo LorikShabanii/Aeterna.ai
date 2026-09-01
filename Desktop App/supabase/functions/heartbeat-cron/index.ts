@@ -74,8 +74,61 @@ function generateToken(): string {
     .join('')
 }
 
+function fromBase64(b64: string): Uint8Array {
+  const binary = atob(b64)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+  return bytes
+}
+
+function toBase64(bytes: ArrayBuffer): string {
+  const arr = new Uint8Array(bytes)
+  let binary = ''
+  for (const byte of arr) binary += String.fromCharCode(byte)
+  return btoa(binary)
+}
+
+let cachedEscrowPrivateKey: CryptoKey | undefined
+
+async function getEscrowPrivateKey(): Promise<CryptoKey> {
+  if (!cachedEscrowPrivateKey) {
+    cachedEscrowPrivateKey = await crypto.subtle.importKey(
+      'pkcs8',
+      fromBase64(Deno.env.get('ESCROW_PRIVATE_KEY')!),
+      { name: 'RSA-OAEP', hash: 'SHA-256' },
+      false,
+      ['decrypt'],
+    )
+  }
+  return cachedEscrowPrivateKey
+}
+
+// Unwraps the owner's vault key so it can ride in the recipient's email
+// link as a URL fragment (never sent to any server in a request — only
+// this function transiently holds the plaintext key in memory, for the
+// instant it takes to build that link). Returns null if the owner has no
+// vault_keys row yet (hasn't logged in since this feature shipped).
+// deno-lint-ignore no-explicit-any
+async function unwrapOwnerVaultKey(supabase: any, ownerId: string): Promise<string | null> {
+  const { data } = await supabase
+    .from('vault_keys')
+    .select('wrapped_by_escrow')
+    .eq('user_id', ownerId)
+    .maybeSingle()
+  if (!data) return null
+
+  const privateKey = await getEscrowPrivateKey()
+  const raw = await crypto.subtle.decrypt(
+    { name: 'RSA-OAEP' },
+    privateKey,
+    fromBase64(data.wrapped_by_escrow),
+  )
+  return toBase64(raw)
+}
+
 // deno-lint-ignore no-explicit-any
 async function notifyRecipients(supabase: any, transport: any, from: string, appUrl: string, ownerId: string, ownerEmail: string) {
+  const vaultKeyB64 = await unwrapOwnerVaultKey(supabase, ownerId)
   const { data: links } = await supabase
     .from('vault_item_recipients')
     .select('recipient_id, vault_items!inner(user_id)')
@@ -111,12 +164,19 @@ async function notifyRecipients(supabase: any, transport: any, from: string, app
       continue
     }
 
+    const link = vaultKeyB64
+      ? `${appUrl}/handover/${token}#key=${encodeURIComponent(vaultKeyB64)}`
+      : `${appUrl}/handover/${token}`
+    const contentNote = vaultKeyB64
+      ? "The link includes what's needed to view it — keep it private."
+      : '(Content viewing isn\'t available for this delivery yet.)'
+
     try {
       await transport.sendMail({
         from,
         to: recipient.contact,
         subject: 'Aeterna — something has been entrusted to you',
-        text: `${recipient.name}, ${ownerEmail} has entrusted you with something through Aeterna.\n\nView what's been left for you: ${appUrl}/handover/${token}\n\n(Note: this currently shows what was left for you — full content viewing is coming soon.)`,
+        text: `${recipient.name}, ${ownerEmail} has entrusted you with something through Aeterna.\n\nView what's been left for you: ${link}\n\n${contentNote}`,
       })
       notified += 1
     } catch (sendErr) {

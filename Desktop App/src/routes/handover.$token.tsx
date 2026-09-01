@@ -1,10 +1,16 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { getHandoverInfo } from '@/lib/handover/handover'
+import { useEffect, useState } from 'react'
+import { getHandoverInfo, type HandoverItem } from '@/lib/handover/handover'
+import { decryptText, decryptToBlob, importVaultKey } from '@/lib/crypto/vault-key'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 
 // Deliberately public and login-free, same as /recover — the token in the
-// URL is the credential (see src/lib/handover/handover.ts for why this
-// only lists titles rather than showing actual content).
+// URL is the credential. The vault key (when present) rides in the URL
+// fragment (#key=...), which browsers never send to any server — only
+// this page's own client-side code ever sees it, and only to decrypt
+// locally. See src/lib/handover/handover.ts and
+// supabase/migrations/20260907000000_vault_key_escrow.sql.
 export const Route = createFileRoute('/handover/$token')({
   loader: ({ params }) => getHandoverInfo({ data: { token: params.token } }),
   component: HandoverPage,
@@ -20,8 +26,32 @@ export const Route = createFileRoute('/handover/$token')({
   ),
 })
 
+function fromBase64(b64: string): Uint8Array<ArrayBuffer> {
+  const binary = atob(b64)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+  return bytes
+}
+
 function HandoverPage() {
   const { recipientName, ownerEmail, items } = Route.useLoaderData()
+
+  // Read after mount, not during render — the URL fragment never reaches
+  // the server, so the SSR pass and first client render must agree there's
+  // no key yet, same reasoning as the vault page's locked/unlocked state.
+  const [vaultKey, setVaultKey] = useState<CryptoKey | null>(null)
+  const [keyMissing, setKeyMissing] = useState(false)
+
+  useEffect(() => {
+    const match = window.location.hash.match(/key=([^&]+)/)
+    if (!match) {
+      setKeyMissing(true)
+      return
+    }
+    importVaultKey(fromBase64(decodeURIComponent(match[1])))
+      .then(setVaultKey)
+      .catch(() => setKeyMissing(true))
+  }, [])
 
   return (
     <div className="flex min-h-svh items-center justify-center bg-paper p-6 text-ink">
@@ -38,22 +68,87 @@ function HandoverPage() {
           ) : (
             <ul className="space-y-2">
               {items.map((item, i) => (
-                <li key={i} className="rounded-md border border-input px-3 py-2 text-sm">
-                  <p className="font-medium">{item.title}</p>
-                  <p className="text-muted-foreground">
-                    {item.type}
-                    {item.category ? ` · ${item.category}` : ''}
-                  </p>
+                <li key={i}>
+                  <HandoverItemCard item={item} vaultKey={vaultKey} />
                 </li>
               ))}
             </ul>
           )}
-          <p className="text-sm text-muted-foreground">
-            Viewing the actual contents isn't available yet — this page currently only confirms
-            what's been left for you.
-          </p>
+          {keyMissing ? (
+            <p className="text-sm text-muted-foreground">
+              This link doesn't include a decryption key, so content can't be shown here — only
+              what was left for you.
+            </p>
+          ) : null}
         </CardContent>
       </Card>
+    </div>
+  )
+}
+
+function HandoverItemCard({ item, vaultKey }: { item: HandoverItem; vaultKey: CryptoKey | null }) {
+  const [revealed, setRevealed] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [pending, setPending] = useState(false)
+
+  async function handleReveal() {
+    if (!vaultKey || !item.encryptedPayload) return
+    setError(null)
+    try {
+      setRevealed(await decryptText(vaultKey, item.encryptedPayload))
+    } catch {
+      setError("Couldn't decrypt this — the link may be out of date.")
+    }
+  }
+
+  async function handleDownload() {
+    if (!vaultKey || !item.downloadUrl) return
+    setError(null)
+    setPending(true)
+    try {
+      const response = await fetch(item.downloadUrl)
+      const encryptedBlob = await response.blob()
+      const decrypted = await decryptToBlob(vaultKey, encryptedBlob)
+      const url = URL.createObjectURL(decrypted)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = item.title
+      link.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      setError("Couldn't decrypt this — the link may be out of date.")
+    } finally {
+      setPending(false)
+    }
+  }
+
+  return (
+    <div className="rounded-md border border-input px-3 py-2 text-sm">
+      <p className="font-medium">{item.title}</p>
+      <p className="text-muted-foreground">
+        {item.type}
+        {item.category ? ` · ${item.category}` : ''}
+      </p>
+      {item.encryptedPayload ? (
+        revealed === null ? (
+          <Button variant="link" size="sm" className="mt-1 h-auto p-0" onClick={handleReveal} disabled={!vaultKey}>
+            Reveal
+          </Button>
+        ) : (
+          <p className="mt-2 whitespace-pre-wrap text-foreground">{revealed}</p>
+        )
+      ) : item.downloadUrl ? (
+        <Button
+          variant="link"
+          size="sm"
+          className="mt-1 h-auto p-0"
+          onClick={handleDownload}
+          disabled={!vaultKey || pending}
+        >
+          {pending ? 'Decrypting…' : 'Download'}
+        </Button>
+      ) : null}
+      {error ? <p className="mt-1 text-destructive">{error}</p> : null}
     </div>
   )
 }

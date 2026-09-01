@@ -33,7 +33,7 @@ function RecipientsPage() {
               <CardTitle>No recipients yet</CardTitle>
             </CardHeader>
             <CardContent className="text-sm text-muted-foreground">
-              Add someone above — a name and an email or phone number is all that's needed.
+              Add someone above — a name and an email address is all that's needed.
             </CardContent>
           </Card>
         ) : (
@@ -90,9 +90,10 @@ function NewRecipientForm({ onCreated }: { onCreated: () => void }) {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="recipient-contact">Email or phone</Label>
+            <Label htmlFor="recipient-contact">Email</Label>
             <Input
               id="recipient-contact"
+              type="email"
               value={contact}
               onChange={(e) => setContact(e.target.value)}
               placeholder="amara@example.com"

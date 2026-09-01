@@ -67,6 +67,13 @@ export interface HandoverRow {
   created_at: string
 }
 
+export interface VaultKeyRow {
+  user_id: string
+  wrapped_by_password: string
+  wrapped_by_escrow: string
+  created_at: string
+}
+
 export interface Database {
   // Required by @supabase/supabase-js's generic client machinery — without
   // it, every query result silently types as `never`. Matches what
@@ -200,6 +207,22 @@ export interface Database {
           user_id?: string
           recipient_id?: string
           token_hash?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
+      vault_keys: {
+        Row: VaultKeyRow
+        Insert: {
+          user_id: string
+          wrapped_by_password: string
+          wrapped_by_escrow: string
+          created_at?: string
+        }
+        Update: {
+          user_id?: string
+          wrapped_by_password?: string
+          wrapped_by_escrow?: string
           created_at?: string
         }
         Relationships: []
