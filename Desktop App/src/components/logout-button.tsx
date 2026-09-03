@@ -13,7 +13,10 @@ export function LogoutButton() {
     const supabase = getSupabaseBrowserClient()
     await supabase.auth.signOut()
     clearVaultKey()
-    await navigate({ to: '/login' })
+    // Home, not /login — signing out is a deliberate exit, and dropping
+    // someone straight onto a sign-in form reads like the app wants them
+    // back immediately.
+    await navigate({ to: '/' })
   }
 
   return (
