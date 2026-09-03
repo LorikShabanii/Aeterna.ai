@@ -46,7 +46,11 @@ This repo is split into three top-level folders:
   actual success path (approving a live Windows Hello prompt) hasn't been
   verified by a human yet, since no dev machine so far has had Windows
   Hello enrolled. macOS (Touch ID) support from the same plugin is
-  installed but untested (no Mac in this dev loop). Not yet built: the
+  installed but untested (no Mac in this dev loop). A teammate's PR added
+  dark mode, a 5-attempt/30-minute login lockout, and first/last
+  name + optional phone at signup (phone is captured but nothing sends
+  SMS yet). The packaged installer predates that PR and the biometric
+  work — rebuild before distributing. Not yet built: the
   four differentiation features in
   `docs/roadmap-differentiation-features.md` (not started).
 
