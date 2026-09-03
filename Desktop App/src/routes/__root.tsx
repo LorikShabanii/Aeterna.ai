@@ -2,6 +2,7 @@ import { HeadContent, Scripts, createRootRoute } from '@tanstack/react-router'
 import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools'
 import { TanStackDevtools } from '@tanstack/react-devtools'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { themeInitScript } from '@/lib/theme/theme'
 
 import appCss from '../styles.css?url'
 
@@ -37,9 +38,15 @@ export const Route = createRootRoute({
 
 function RootDocument({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    // suppressHydrationWarning: the inline script below sets the `dark` class
+    // on <html> before React hydrates, so the markup React sees differs from
+    // what it rendered on the server. That difference is the intended effect.
+    <html lang="en" suppressHydrationWarning>
       <head>
         <HeadContent />
+        {/* Must run before first paint, or a dark-mode user gets a white
+            flash on every load — see src/lib/theme/theme.ts. */}
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body>
         <TooltipProvider>{children}</TooltipProvider>

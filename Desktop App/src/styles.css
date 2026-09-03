@@ -40,25 +40,42 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Quiet paper ritual palette. Declared `inline` and pointing at runtime
+     custom properties (rather than literal colors in a plain @theme block)
+     so that `bg-paper`, `text-ink` and friends follow .dark the same way
+     the shadcn tokens above already do. The names stay meaning-based —
+     `paper` is whatever the page surface is, `ink` is whatever you write on
+     it with — so the dark values invert rather than merely darken, and
+     pairings like `bg-ink text-paper` stay legible in both themes. */
+  --color-paper: var(--paper);
+  --color-paper2: var(--paper2);
+  --color-ink: var(--ink);
+  --color-mist: var(--mist);
+  --color-fog: var(--fog);
+  --color-mistblue: var(--mistblue);
+  --color-seal: var(--seal);
+  --color-cool: var(--cool);
 }
 
 @theme {
   --font-sans: "Karla", ui-sans-serif, system-ui, sans-serif;
   --font-serif: "Fraunces", ui-serif, Georgia, serif;
-
-  /* Quiet paper ritual palette */
-  --color-paper: oklch(0.956 0.008 95);
-  --color-paper2: oklch(0.975 0.006 95);
-  --color-ink: oklch(0.32 0.028 240);
-  --color-mist: oklch(0.93 0.011 235);
-  --color-fog: oklch(0.85 0.018 235);
-  --color-mistblue: oklch(0.81 0.025 235);
-  --color-seal: oklch(0.56 0.04 60);
-  --color-cool: oklch(0.61 0.035 235);
 }
 
 :root {
   --radius: 0.75rem;
+
+  /* Paper ritual palette — light */
+  --paper: oklch(0.956 0.008 95);
+  --paper2: oklch(0.975 0.006 95);
+  --ink: oklch(0.32 0.028 240);
+  --mist: oklch(0.93 0.011 235);
+  --fog: oklch(0.85 0.018 235);
+  --mistblue: oklch(0.81 0.025 235);
+  --seal: oklch(0.56 0.04 60);
+  --cool: oklch(0.61 0.035 235);
+
   --background: oklch(0.956 0.008 95);
   --foreground: oklch(0.32 0.028 240);
   --card: oklch(0.975 0.006 95);
@@ -89,6 +106,19 @@
 }
 
 .dark {
+  /* Paper ritual palette — dark. Same hues, roles swapped: the page becomes
+     the deep blue that used to be the ink, and the warm off-white that used
+     to be the paper becomes the text. `seal` brightens instead of inverting
+     — it's the wax, and it has to read as warm against a dark ground. */
+  --paper: oklch(0.24 0.022 240);
+  --paper2: oklch(0.29 0.025 240);
+  --ink: oklch(0.945 0.008 95);
+  --mist: oklch(0.34 0.028 240);
+  --fog: oklch(0.46 0.03 238);
+  --mistblue: oklch(0.56 0.032 235);
+  --seal: oklch(0.72 0.05 60);
+  --cool: oklch(0.75 0.026 235);
+
   --background: oklch(0.24 0.022 240);
   --foreground: oklch(0.956 0.008 95);
   --card: oklch(0.29 0.025 240);

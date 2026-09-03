@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { SealMark } from "@/components/seal-mark";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -29,10 +30,10 @@ function Index() {
       {/* NAV */}
       <header className="border-b border-mist/70">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6 md:px-10">
-          <div className="flex items-center gap-2.5">
+          <Link to="/" className="flex items-center gap-2.5">
             <SealMark className="size-6" />
             <span className="font-serif text-lg text-ink">Aeterna</span>
-          </div>
+          </Link>
           <nav className="hidden items-center gap-8 text-sm text-cool md:flex">
             <a href="#how" className="transition hover:text-ink">
               How it works
@@ -45,6 +46,7 @@ function Index() {
             </a>
           </nav>
           <div className="flex items-center gap-4">
+            <ThemeToggle />
             <Link to="/login" className="hidden text-sm text-cool transition hover:text-ink sm:inline">
               Sign in
             </Link>
@@ -414,10 +416,10 @@ function Index() {
       {/* FOOTER */}
       <footer className="bg-paper">
         <div className="mx-auto flex max-w-6xl flex-col justify-between gap-6 px-6 py-14 md:flex-row md:items-center md:px-10">
-          <div className="flex items-center gap-2.5">
+          <Link to="/" className="flex items-center gap-2.5">
             <SealMark className="size-6" />
             <span className="font-serif text-lg text-ink">Aeterna</span>
-          </div>
+          </Link>
           <p className="text-sm text-cool">
             A quiet place to entrust what matters. Zero-knowledge, always.
           </p>
