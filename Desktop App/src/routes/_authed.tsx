@@ -5,6 +5,7 @@ import { checkIn, getCheckInStatus } from '@/lib/heartbeat/checkin'
 import { isTauriRuntime, requestBiometricVerification } from '@/lib/tauri/biometric'
 import { LogoutButton } from '@/components/logout-button'
 import { SealMark } from '@/components/seal-mark'
+import { ThemeToggle } from '@/components/theme-toggle'
 import { Button } from '@/components/ui/button'
 
 export const Route = createFileRoute('/_authed')({
@@ -89,6 +90,7 @@ function AuthedLayout() {
           </div>
           <div className="flex items-center gap-4">
             <span className="hidden text-sm text-muted-foreground sm:inline">{user.email}</span>
+            <ThemeToggle />
             <LogoutButton />
           </div>
         </div>

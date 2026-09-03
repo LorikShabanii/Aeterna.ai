@@ -33,6 +33,9 @@
   `profiles` and schedules the hourly cron that calls the
   `heartbeat-cron` Edge Function. **Edit the `<CRON_SECRET>` placeholder in
   this file to match what you set in step 5 before running it.**
+- `20260909000000_profile_contact_details.sql` — adds `first_name`,
+  `last_name`, `phone` (E.164, nullable) and `phone_country` to `profiles`,
+  and rewrites `handle_new_user()` to copy them out of the signup metadata.
 
 ## Not yet migrated
 
