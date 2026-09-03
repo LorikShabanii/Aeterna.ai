@@ -40,6 +40,12 @@ export interface ProfileRow {
   last_check_in_at: string
   created_at: string
   last_reminder_tier: number | null
+  first_name: string | null
+  last_name: string | null
+  /** E.164, e.g. +38344123456. Optional — nothing sends SMS today. */
+  phone: string | null
+  /** ISO 3166-1 alpha-2 of the dial code the user picked. */
+  phone_country: string | null
 }
 
 export type CheckInMethod = 'biometric' | 'recovery_key'
@@ -152,6 +158,10 @@ export interface Database {
           last_check_in_at?: string
           created_at?: string
           last_reminder_tier?: number | null
+          first_name?: string | null
+          last_name?: string | null
+          phone?: string | null
+          phone_country?: string | null
         }
         Update: {
           id?: string
@@ -159,6 +169,10 @@ export interface Database {
           last_check_in_at?: string
           created_at?: string
           last_reminder_tier?: number | null
+          first_name?: string | null
+          last_name?: string | null
+          phone?: string | null
+          phone_country?: string | null
         }
         Relationships: []
       }
