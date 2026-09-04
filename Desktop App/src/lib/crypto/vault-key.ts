@@ -20,6 +20,12 @@ function fromBase64(b64: string) {
   return bytes
 }
 
+function toHex(bytes: Uint8Array) {
+  return Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
+}
+
 export function generateSaltB64() {
   return toBase64(crypto.getRandomValues(new Uint8Array(16)))
 }
@@ -119,4 +125,16 @@ export async function decryptToBlob(key: CryptoKey, encrypted: Blob, mimeType?: 
   const bytes = new Uint8Array(await encrypted.arrayBuffer())
   const plaintext = await decryptBytes(key, bytes)
   return new Blob([plaintext], mimeType ? { type: mimeType } : undefined)
+}
+
+// SHA-256 of the raw, unencrypted file — hashed before encryptFile() ever
+// touches it, so it's provable later that this exact file existed at
+// capture time (see docs/roadmap-differentiation-features.md > Feature 1).
+// Hashing the ciphertext instead would only prove the *encrypted blob*
+// existed, which is useless once the vault key changes or the file is
+// re-encrypted.
+export async function hashFile(file: File): Promise<string> {
+  const bytes = await file.arrayBuffer()
+  const digest = await crypto.subtle.digest('SHA-256', bytes)
+  return toHex(new Uint8Array(digest))
 }

@@ -1,7 +1,9 @@
 import { createServerFn } from '@tanstack/react-start'
 import { z } from 'zod'
 import { getSupabaseServerClient } from '@/lib/supabase/server'
-import type { Database, VaultItemRow } from '@/lib/supabase/types'
+import { sendEmail } from '@/lib/email/send'
+import { generateToken, getAppUrl, hashToken } from '@/lib/tokens'
+import type { Database, VaultItemRow, VaultItemWitnessRow } from '@/lib/supabase/types'
 
 // @supabase/supabase-js@2.112.4's generic inference currently resolves the
 // table type to `never` for this (correctly-shaped, __InternalSupabase-
@@ -31,27 +33,48 @@ export const listVaultItems = createServerFn({ method: 'GET' }).handler(async ()
   if (error) throw new Error(error.message)
 
   return (data ?? []).map(
-    ({ id, type, title, category, encrypted_payload, encrypted_file_url, created_at }) => ({
+    ({
       id,
       type,
       title,
       category,
       encrypted_payload,
       encrypted_file_url,
+      content_hash,
+      captured_at,
+      created_at,
+    }) => ({
+      id,
+      type,
+      title,
+      category,
+      encrypted_payload,
+      encrypted_file_url,
+      content_hash,
+      captured_at,
       created_at,
     }),
   )
 })
 
-async function insertVaultItem(insertPayload: Database['public']['Tables']['vault_items']['Insert']) {
+async function insertVaultItem(
+  insertPayload: Database['public']['Tables']['vault_items']['Insert'],
+): Promise<string> {
   const supabase = getSupabaseServerClient()
-  const { error } = (await (
+  const { data, error } = (await (
     supabase.from('vault_items') as unknown as {
-      insert: (values: typeof insertPayload) => PromiseLike<{ error: PgError }>
+      insert: (values: typeof insertPayload) => {
+        select: (columns: 'id') => { single: () => PromiseLike<{ data: { id: string } | null; error: PgError }> }
+      }
     }
-  ).insert(insertPayload)) as { error: PgError }
+  )
+    .insert(insertPayload)
+    .select('id')
+    .single()) as { data: { id: string } | null; error: PgError }
 
   if (error) throw new Error(error.message)
+  if (!data) throw new Error('Insert did not return an id')
+  return data.id
 }
 
 // Matches CLAUDE.md's data model examples ('personal', 'financial',
@@ -86,6 +109,17 @@ export const createLetter = createServerFn({ method: 'POST' })
     })
   })
 
+// Up to 2 people present at recording time (docs/roadmap-differentiation-
+// features.md > Feature 4) — witnessedAt is the SAME client timestamp as
+// the video's own capturedAt above, not a separate one, since the whole
+// point is that they were there at that moment. The witness confirms
+// themselves asynchronously by email (see src/lib/vault/witnesses.ts) —
+// the owner no longer checks a consent box on their behalf.
+const witnessSchema = z.object({
+  name: z.string().min(1, 'Witness name is required'),
+  contact: z.string().min(1, 'Witness contact is required'),
+})
+
 const createFileItemSchema = z.object({
   title: z.string().min(1, 'Title is required'),
   type: z.enum(['document', 'photo', 'video']),
@@ -94,6 +128,12 @@ const createFileItemSchema = z.object({
   // the file's bytes never pass through the server.
   storagePath: z.string().min(1),
   category: categorySchema,
+  // SHA-256 of the raw file and the moment it was selected, both computed
+  // client-side before encryption (src/lib/crypto/vault-key.ts#hashFile) —
+  // see docs/roadmap-differentiation-features.md > Feature 1.
+  contentHash: z.string().length(64),
+  capturedAt: z.string().datetime(),
+  witnesses: z.array(witnessSchema).max(2).default([]),
 })
 
 export const createFileItem = createServerFn({ method: 'POST' })
@@ -105,14 +145,73 @@ export const createFileItem = createServerFn({ method: 'POST' })
     } = await supabase.auth.getUser()
     if (!user) throw new Error('Not authenticated')
 
-    await insertVaultItem({
+    const vaultItemId = await insertVaultItem({
       user_id: user.id,
       type: data.type,
       title: data.title,
       encrypted_file_url: data.storagePath,
       category: data.category ?? null,
+      content_hash: data.contentHash,
+      captured_at: data.capturedAt,
     })
+
+    if (data.witnesses.length > 0) {
+      const witnessesWithTokens = data.witnesses.map((w) => ({
+        ...w,
+        token: generateToken(),
+      }))
+
+      const witnessPayload: Database['public']['Tables']['vault_item_witnesses']['Insert'][] =
+        witnessesWithTokens.map((w) => ({
+          vault_item_id: vaultItemId,
+          name: w.name,
+          contact: w.contact,
+          witnessed_at: data.capturedAt,
+          token_hash: hashToken(w.token),
+          status: 'pending',
+        }))
+
+      const { error } = (await (
+        supabase.from('vault_item_witnesses') as unknown as {
+          insert: (values: typeof witnessPayload) => PromiseLike<{ error: PgError }>
+        }
+      ).insert(witnessPayload)) as { error: PgError }
+
+      if (error) throw new Error(error.message)
+
+      // Best-effort — a delivery failure here shouldn't roll back an
+      // otherwise-successful upload; the owner can still see the witness
+      // sitting in 'pending' status on the item card.
+      await Promise.allSettled(
+        witnessesWithTokens.map((w) =>
+          sendEmail(
+            w.contact,
+            `You were named as a witness — "${data.title}"`,
+            `${w.name}, you're being named as a witness to "${data.title}" on Aeterna, ` +
+              `a digital legacy vault.\n\n` +
+              `If you were actually present for this, please confirm here:\n` +
+              `${getAppUrl()}/witness/${w.token}\n\n` +
+              `If you don't recognize this, you can ignore this email.`,
+          ),
+        ),
+      )
+    }
   })
+
+// Every witness row for items the current user owns — RLS
+// (vault_item_witnesses_select_own) already scopes this; the client
+// groups rows by vault_item_id locally, same pattern as
+// listVaultItemRecipients.
+export const listVaultItemWitnesses = createServerFn({ method: 'GET' }).handler(async () => {
+  const supabase = getSupabaseServerClient()
+  const { data, error } = (await supabase.from('vault_item_witnesses').select('*')) as {
+    data: VaultItemWitnessRow[] | null
+    error: PgError
+  }
+
+  if (error) throw new Error(error.message)
+  return data ?? []
+})
 
 const deleteVaultItemSchema = z.object({
   id: z.string().uuid(),

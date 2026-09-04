@@ -175,6 +175,62 @@ check-in signal. The app never touches raw biometric data; this avoids
 BIPA/GDPR special-category-data exposure that a custom facial-recognition
 system would create.
 
+## Market rollout and jurisdiction strategy
+
+### Two separate jurisdictions — do not conflate them
+
+1. **Land/legal jurisdiction** — where the parcels and succession disputes
+   actually are. This determines which `CadastralProvider` and which
+   succession-law assumptions apply.
+2. **Paying-customer jurisdiction** — where the diaspora with purchasing
+   power actually lives (primarily Germany, Austria, Switzerland). This
+   determines payment processing, account data handling, and which
+   consumer/data protection law governs the paying user relationship.
+
+These require separate compliance tracks. Do not assume Kosovo's legal
+requirements apply to a German-resident paying customer, and do not assume
+German/EU consumer protection law applies to how a Kosovo land parcel is
+handled.
+
+### Staged country rollout for the CadastralProvider registry
+
+**Tier 1 (beta — build now)**: Kosovo, Albania, North Macedonia,
+Montenegro, Serbia, Bosnia and Herzegovina. Shared post-socialist cadastral
+fragmentation and similar succession-law structure (inherited from the same
+legal tradition). None are EU members, so none require eIDAS-tier
+electronic signatures yet — GDPR-equivalent privacy practices are still
+expected because paying customers are EU-resident, but the
+land-jurisdiction legal bar is lower here than Tier 2.
+
+**Tier 2 (second wave — do not build yet, but do not hardcode assumptions
+that would block adding these later)**: Croatia, Slovenia. Same
+ex-Yugoslav legal root as Tier 1, but EU members — this is where real
+eIDAS-compliant electronic signatures and full GDPR obligations first apply
+on the land-jurisdiction side, not just the paying-customer side.
+
+**Tier 3 (later — do not build)**: Bulgaria, Romania, Greece. EU Balkan
+periphery, different legal history from the ex-Yugoslav cluster — treat as
+requiring its own legal/cadastral research pass, not an extension of Tier 1
+or Tier 2 assumptions.
+
+### What this means for the code
+
+- The `providers` registry (see CadastralProvider architecture) should stay
+  keyed by `country_code` exactly as already designed — this rollout plan
+  is the reason that architecture matters, don't collapse it into
+  Kosovo-only logic anywhere.
+- Signup/onboarding should collect the paying user's country of residence
+  separately from the land parcel's country — these are two different
+  fields, not one. Do not infer one from the other.
+- Privacy policy, ToS, and consent copy should be written primarily for a
+  Kosovo/Balkan-diaspora user living in Germany/Austria/Switzerland — that
+  is the primary paying persona for beta, even though the land-jurisdiction
+  work is Kosovo-first. Flag any copy that assumes the user and the land
+  are in the same country.
+- Do not add real Tier 2/Tier 3 country provider implementations yet —
+  Tier 1 only for beta. Stub files for future tiers are fine if they
+  already exist, but no new ones needed right now.
+
 ## Suggested backend
 
 **Supabase** (Postgres + Auth + Storage + Row Level Security) — matches
@@ -225,6 +281,31 @@ time. Full spec, schema sketches, and build order in
 `docs/roadmap-differentiation-features.md`. Build order matters — start
 with the hashing/timestamping feature, since the other three depend on the
 pattern it establishes.
+
+## TODO: deferred decisions from the Feature 3 / Feature 4 revision
+
+Both items below were raised while building the differentiation features
+and deliberately deferred rather than decided — flagging them here so
+they aren't lost, not proposing an answer.
+
+- **Feature 3 (notary/lawyer referral) — real e-signature provider.**
+  What's built (`src/lib/notary/notary.ts`, `/notarize/$token`) is a
+  lightweight "click to confirm" link — explicitly not a legally binding
+  signature, and the UI says so. Swap in a real e-signature provider
+  (e.g. DocuSign, Dropbox Sign) behind the same `NotaryPartner` interface
+  when this needs to be legally meaningful.
+- **Feature 4 (multi-witness co-signing) — photo-vs-video face matching.**
+  What's built (`src/lib/vault/witnesses.ts`, `/witness/$token`) has each
+  witness confirm themselves by email, with an optional photo stored
+  as-is and never automatically compared against anything. Automatically
+  matching that photo against the video was the original ask, but it
+  would mean building a custom face-recognition model — which directly
+  conflicts with this file's standing "Do not build a custom
+  face-recognition model" instruction under Platform (MVP decision),
+  adopted specifically to avoid BIPA/GDPR special-category biometric data
+  exposure. **Do not build this without an explicit, separate decision to
+  override that policy** — it's a real product/legal tradeoff, not a
+  default to build toward.
 
 ## Accounts / integrations needed before building
 

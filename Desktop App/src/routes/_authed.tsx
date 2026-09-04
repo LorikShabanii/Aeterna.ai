@@ -80,6 +80,13 @@ function AuthedLayout() {
                 Recipients
               </Link>
               <Link
+                to="/land"
+                className="text-sm text-cool transition hover:text-ink"
+                activeProps={{ className: 'font-medium text-ink' }}
+              >
+                Land
+              </Link>
+              <Link
                 to="/recovery-key"
                 className="text-sm text-cool transition hover:text-ink"
                 activeProps={{ className: 'font-medium text-ink' }}

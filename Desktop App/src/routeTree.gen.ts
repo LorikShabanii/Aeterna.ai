@@ -14,10 +14,13 @@ import { Route as AuthedRouteImport } from './routes/_authed'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as RecoverRouteImport } from './routes/recover'
 import { Route as SignupRouteImport } from './routes/signup'
+import { Route as AuthedLandRouteImport } from './routes/_authed/land'
 import { Route as AuthedRecipientsRouteImport } from './routes/_authed/recipients'
 import { Route as AuthedRecoveryKeyRouteImport } from './routes/_authed/recovery-key'
 import { Route as AuthedVaultRouteImport } from './routes/_authed/vault'
 import { Route as HandoverTokenRouteImport } from './routes/handover.$token'
+import { Route as NotarizeTokenRouteImport } from './routes/notarize.$token'
+import { Route as WitnessTokenRouteImport } from './routes/witness.$token'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -43,6 +46,11 @@ const SignupRoute = SignupRouteImport.update({
   path: '/signup',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthedLandRoute = AuthedLandRouteImport.update({
+  id: '/land',
+  path: '/land',
+  getParentRoute: () => AuthedRoute,
+} as any)
 const AuthedRecipientsRoute = AuthedRecipientsRouteImport.update({
   id: '/recipients',
   path: '/recipients',
@@ -63,26 +71,42 @@ const HandoverTokenRoute = HandoverTokenRouteImport.update({
   path: '/handover/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
+const NotarizeTokenRoute = NotarizeTokenRouteImport.update({
+  id: '/notarize/$token',
+  path: '/notarize/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WitnessTokenRoute = WitnessTokenRouteImport.update({
+  id: '/witness/$token',
+  path: '/witness/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/recover': typeof RecoverRoute
   '/signup': typeof SignupRoute
+  '/land': typeof AuthedLandRoute
   '/recipients': typeof AuthedRecipientsRoute
   '/recovery-key': typeof AuthedRecoveryKeyRoute
   '/vault': typeof AuthedVaultRoute
   '/handover/$token': typeof HandoverTokenRoute
+  '/notarize/$token': typeof NotarizeTokenRoute
+  '/witness/$token': typeof WitnessTokenRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/recover': typeof RecoverRoute
   '/signup': typeof SignupRoute
+  '/land': typeof AuthedLandRoute
   '/recipients': typeof AuthedRecipientsRoute
   '/recovery-key': typeof AuthedRecoveryKeyRoute
   '/vault': typeof AuthedVaultRoute
   '/handover/$token': typeof HandoverTokenRoute
+  '/notarize/$token': typeof NotarizeTokenRoute
+  '/witness/$token': typeof WitnessTokenRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -91,10 +115,13 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/recover': typeof RecoverRoute
   '/signup': typeof SignupRoute
+  '/_authed/land': typeof AuthedLandRoute
   '/_authed/recipients': typeof AuthedRecipientsRoute
   '/_authed/recovery-key': typeof AuthedRecoveryKeyRoute
   '/_authed/vault': typeof AuthedVaultRoute
   '/handover/$token': typeof HandoverTokenRoute
+  '/notarize/$token': typeof NotarizeTokenRoute
+  '/witness/$token': typeof WitnessTokenRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -103,20 +130,26 @@ export interface FileRouteTypes {
     | '/login'
     | '/recover'
     | '/signup'
+    | '/land'
     | '/recipients'
     | '/recovery-key'
     | '/vault'
     | '/handover/$token'
+    | '/notarize/$token'
+    | '/witness/$token'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/login'
     | '/recover'
     | '/signup'
+    | '/land'
     | '/recipients'
     | '/recovery-key'
     | '/vault'
     | '/handover/$token'
+    | '/notarize/$token'
+    | '/witness/$token'
   id:
     | '__root__'
     | '/'
@@ -124,10 +157,13 @@ export interface FileRouteTypes {
     | '/login'
     | '/recover'
     | '/signup'
+    | '/_authed/land'
     | '/_authed/recipients'
     | '/_authed/recovery-key'
     | '/_authed/vault'
     | '/handover/$token'
+    | '/notarize/$token'
+    | '/witness/$token'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -137,6 +173,8 @@ export interface RootRouteChildren {
   RecoverRoute: typeof RecoverRoute
   SignupRoute: typeof SignupRoute
   HandoverTokenRoute: typeof HandoverTokenRoute
+  NotarizeTokenRoute: typeof NotarizeTokenRoute
+  WitnessTokenRoute: typeof WitnessTokenRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -176,6 +214,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SignupRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authed/land': {
+      id: '/_authed/land'
+      path: '/land'
+      fullPath: '/land'
+      preLoaderRoute: typeof AuthedLandRouteImport
+      parentRoute: typeof AuthedRoute
+    }
     '/_authed/recipients': {
       id: '/_authed/recipients'
       path: '/recipients'
@@ -204,16 +249,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof HandoverTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/notarize/$token': {
+      id: '/notarize/$token'
+      path: '/notarize/$token'
+      fullPath: '/notarize/$token'
+      preLoaderRoute: typeof NotarizeTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/witness/$token': {
+      id: '/witness/$token'
+      path: '/witness/$token'
+      fullPath: '/witness/$token'
+      preLoaderRoute: typeof WitnessTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 interface AuthedRouteChildren {
+  AuthedLandRoute: typeof AuthedLandRoute
   AuthedRecipientsRoute: typeof AuthedRecipientsRoute
   AuthedRecoveryKeyRoute: typeof AuthedRecoveryKeyRoute
   AuthedVaultRoute: typeof AuthedVaultRoute
 }
 
 const AuthedRouteChildren: AuthedRouteChildren = {
+  AuthedLandRoute: AuthedLandRoute,
   AuthedRecipientsRoute: AuthedRecipientsRoute,
   AuthedRecoveryKeyRoute: AuthedRecoveryKeyRoute,
   AuthedVaultRoute: AuthedVaultRoute,
@@ -229,6 +290,8 @@ const rootRouteChildren: RootRouteChildren = {
   RecoverRoute: RecoverRoute,
   SignupRoute: SignupRoute,
   HandoverTokenRoute: HandoverTokenRoute,
+  NotarizeTokenRoute: NotarizeTokenRoute,
+  WitnessTokenRoute: WitnessTokenRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

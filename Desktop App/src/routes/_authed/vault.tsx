@@ -5,6 +5,7 @@ import {
   createLetter,
   deleteVaultItem,
   listVaultItems,
+  listVaultItemWitnesses,
   VAULT_ITEM_CATEGORIES,
 } from '@/lib/vault/items'
 import {
@@ -13,13 +14,14 @@ import {
   listVaultItemRecipients,
   unassignRecipient,
 } from '@/lib/recipients/recipients'
-import type { RecipientRow } from '@/lib/supabase/types'
-import { decryptText, decryptToBlob, encryptFile, encryptText } from '@/lib/crypto/vault-key'
-import { ensureVaultKeyFromPassword } from '@/lib/crypto/ensure-vault-key'
+import { listNotarizationRequests, requestNotarization } from '@/lib/notary/notary'
+import type { NotarizationRequestRow, RecipientRow, VaultItemWitnessRow } from '@/lib/supabase/types'
+import { decryptText, decryptToBlob, encryptFile, encryptText, hashFile } from '@/lib/crypto/vault-key'
 import { getVaultKey } from '@/lib/crypto/session-key'
 import { getSupabaseBrowserClient } from '@/lib/supabase/client'
 import { useSealing } from '@/lib/use-sealing'
 import { SealingOverlay } from '@/components/sealing-overlay'
+import { UnlockVaultForm } from '@/components/unlock-vault-form'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -39,21 +41,32 @@ import {
 import { Checkbox } from '@/components/ui/checkbox'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
 
 export const Route = createFileRoute('/_authed/vault')({
   loader: async () => {
-    const [items, recipients, assignments] = await Promise.all([
+    const [items, recipients, assignments, witnesses, notarizations] = await Promise.all([
       listVaultItems(),
       listRecipients(),
       listVaultItemRecipients(),
+      listVaultItemWitnesses(),
+      listNotarizationRequests(),
     ])
-    return { items, recipients, assignments }
+    return { items, recipients, assignments, witnesses, notarizations }
   },
   component: VaultPage,
 })
 
 function VaultPage() {
-  const { items, recipients, assignments } = Route.useLoaderData()
+  const { items, recipients, assignments, witnesses, notarizations } = Route.useLoaderData()
   const router = useRouter()
 
   // The vault key lives only in memory (src/lib/crypto/session-key.ts) and
@@ -109,6 +122,8 @@ function VaultPage() {
                     assignedRecipientIds={assignments
                       .filter((a) => a.vault_item_id === item.id)
                       .map((a) => a.recipient_id)}
+                    witnesses={witnesses.filter((w) => w.vault_item_id === item.id)}
+                    notarizations={notarizations.filter((n) => n.vault_item_id === item.id)}
                     onDeleted={() => router.invalidate()}
                     onAssignmentChanged={() => router.invalidate()}
                   />
@@ -123,57 +138,6 @@ function VaultPage() {
         </p>
       ) : null}
     </div>
-  )
-}
-
-function UnlockVaultForm({ onUnlocked }: { onUnlocked: (key: CryptoKey) => void }) {
-  const [password, setPassword] = useState('')
-  const [pending, setPending] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  async function handleUnlock(e: React.FormEvent) {
-    e.preventDefault()
-    setPending(true)
-    setError(null)
-    try {
-      const supabase = getSupabaseBrowserClient()
-      const key = await ensureVaultKeyFromPassword(supabase, password)
-      onUnlocked(key)
-    } catch {
-      setError('Could not unlock the vault with that password.')
-    } finally {
-      setPending(false)
-    }
-  }
-
-  return (
-    <Card className="torn">
-      <CardHeader>
-        <CardTitle className="font-serif font-medium">Unlock your vault</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleUnlock} className="space-y-4">
-          <p className="text-sm text-muted-foreground">
-            Your vault key lives only in this browser tab, never on our servers — re-enter your
-            password to unlock it for this session.
-          </p>
-          <div className="space-y-2">
-            <Label htmlFor="unlock-password">Password</Label>
-            <Input
-              id="unlock-password"
-              type="password"
-              autoComplete="current-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </div>
-          {error ? <p className="text-sm text-destructive">{error}</p> : null}
-          <Button type="submit" disabled={pending || !password}>
-            {pending ? 'Unlocking…' : 'Unlock'}
-          </Button>
-        </form>
-      </CardContent>
-    </Card>
   )
 }
 
@@ -301,6 +265,11 @@ function matchesFileType(file: File, type: FileVaultType): boolean {
   return !file.type.startsWith('image/') && !file.type.startsWith('video/')
 }
 
+interface WitnessDraft {
+  name: string
+  contact: string
+}
+
 function UploadFileForm({
   vaultKey,
   onCreated,
@@ -312,14 +281,44 @@ function UploadFileForm({
   const [type, setType] = useState<FileVaultType>('document')
   const [category, setCategory] = useState<VaultItemCategory | ''>('')
   const [file, setFile] = useState<File | null>(null)
+  // Set the moment the file is selected, not at submit — that's the actual
+  // capture moment; submit can happen arbitrarily later while the user
+  // fills in the title. See docs/roadmap-differentiation-features.md > Feature 1.
+  const [capturedAt, setCapturedAt] = useState<string | null>(null)
+  // Up to 2 people present at recording time (docs/roadmap-differentiation-
+  // features.md > Feature 4) — only offered for video. The owner just names
+  // them here; each witness gets an email and confirms themselves via
+  // src/routes/witness.$token.tsx, they're not self-attested by the owner.
+  const [witnessDrafts, setWitnessDrafts] = useState<WitnessDraft[]>([])
   const [error, setError] = useState<string | null>(null)
   const { sealing, runSealed } = useSealing()
 
+  function handleFileSelected(selected: File | null) {
+    setFile(selected)
+    setCapturedAt(selected ? new Date().toISOString() : null)
+  }
+
+  function addWitness() {
+    setWitnessDrafts((prev) => (prev.length >= 2 ? prev : [...prev, { name: '', contact: '' }]))
+  }
+
+  function updateWitness(index: number, patch: Partial<WitnessDraft>) {
+    setWitnessDrafts((prev) => prev.map((w, i) => (i === index ? { ...w, ...patch } : w)))
+  }
+
+  function removeWitness(index: number) {
+    setWitnessDrafts((prev) => prev.filter((_, i) => i !== index))
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!file) return
+    if (!file || !capturedAt) return
     if (!matchesFileType(file, type)) {
       setError(`That doesn't look like a ${type} — pick a matching file or change the type.`)
+      return
+    }
+    if (witnessDrafts.some((w) => !w.name || !w.contact)) {
+      setError('Fill in each witness’s name and contact.')
       return
     }
     setError(null)
@@ -331,6 +330,10 @@ function UploadFileForm({
         } = await supabase.auth.getUser()
         if (!user) throw new Error('Not authenticated')
 
+        // Hashed from the untouched original bytes, before encryption —
+        // hashing the ciphertext would only prove the encrypted blob
+        // existed, not the file itself.
+        const contentHash = await hashFile(file)
         const encryptedBlob = await encryptFile(vaultKey, file)
         // The original filename (with extension) rides along in the storage
         // path — storage.foldername() only looks at the segment before the
@@ -342,11 +345,25 @@ function UploadFileForm({
           .upload(storagePath, encryptedBlob, { contentType: 'application/octet-stream' })
         if (uploadError) throw uploadError
 
-        await createFileItem({ data: { title, type, storagePath, category: category || null } })
+        await createFileItem({
+          data: {
+            title,
+            type,
+            storagePath,
+            category: category || null,
+            contentHash,
+            capturedAt,
+            witnesses: witnessDrafts.map((w) => ({
+              name: w.name,
+              contact: w.contact,
+            })),
+          },
+        })
       })
       setTitle('')
-      setFile(null)
+      handleFileSelected(null)
       setCategory('')
+      setWitnessDrafts([])
       onCreated()
     } catch {
       setError('Could not upload that file. Try again.')
@@ -377,7 +394,8 @@ function UploadFileForm({
               value={type}
               onValueChange={(value) => {
                 setType(value as FileVaultType)
-                setFile(null)
+                handleFileSelected(null)
+                setWitnessDrafts([])
               }}
             >
               <SelectTrigger id="file-type" className="w-full">
@@ -396,7 +414,7 @@ function UploadFileForm({
             {file ? (
               <div className="flex items-center justify-between rounded-md border border-input px-3 py-2 text-sm">
                 <span className="truncate">{file.name}</span>
-                <Button type="button" variant="ghost" size="sm" onClick={() => setFile(null)}>
+                <Button type="button" variant="ghost" size="sm" onClick={() => handleFileSelected(null)}>
                   Remove
                 </Button>
               </div>
@@ -406,11 +424,54 @@ function UploadFileForm({
                 id="file-input"
                 type="file"
                 accept={FILE_TYPE_ACCEPT[type]}
-                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                onChange={(e) => handleFileSelected(e.target.files?.[0] ?? null)}
                 required
               />
             )}
           </div>
+          {type === 'video' ? (
+            <div className="space-y-3">
+              <div>
+                <Label>Witnesses (optional, up to 2)</Label>
+                <p className="text-xs text-muted-foreground">
+                  Anyone present for this recording can be added as a witness, timestamped at
+                  the same moment as the video itself. They'll get an email asking them to
+                  confirm — this list only names them, it doesn't confirm on their behalf.
+                </p>
+              </div>
+              {witnessDrafts.map((witness, index) => (
+                <div key={index} className="space-y-2 rounded-md border border-input p-3">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor={`witness-name-${index}`}>Witness {index + 1}</Label>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removeWitness(index)}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                  <Input
+                    id={`witness-name-${index}`}
+                    value={witness.name}
+                    onChange={(e) => updateWitness(index, { name: e.target.value })}
+                    placeholder="Name"
+                  />
+                  <Input
+                    value={witness.contact}
+                    onChange={(e) => updateWitness(index, { contact: e.target.value })}
+                    placeholder="Email"
+                  />
+                </div>
+              ))}
+              {witnessDrafts.length < 2 ? (
+                <Button type="button" variant="outline" size="sm" onClick={addWitness}>
+                  Add a witness
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
           {error ? <p className="text-sm text-destructive">{error}</p> : null}
           <Button type="submit" disabled={sealing || !file}>
             Seal file
@@ -428,6 +489,8 @@ interface VaultItemRow {
   category: string | null
   encrypted_payload: string | null
   encrypted_file_url: string | null
+  content_hash: string | null
+  captured_at: string | null
   created_at: string
 }
 
@@ -436,6 +499,8 @@ function VaultItemCard({
   vaultKey,
   recipients,
   assignedRecipientIds,
+  witnesses,
+  notarizations,
   onDeleted,
   onAssignmentChanged,
 }: {
@@ -443,6 +508,8 @@ function VaultItemCard({
   vaultKey: CryptoKey | null
   recipients: RecipientRow[]
   assignedRecipientIds: string[]
+  witnesses: VaultItemWitnessRow[]
+  notarizations: NotarizationRequestRow[]
   onDeleted: () => void
   onAssignmentChanged: () => void
 }) {
@@ -550,6 +617,52 @@ function VaultItemCard({
         )}
         {actionError ? <p className="mt-1 text-destructive">{actionError}</p> : null}
 
+        {item.captured_at && item.content_hash ? (
+          <div className="mt-4 rounded-md border border-mist/70 bg-mist/20 px-3 py-2">
+            <p className="text-xs font-medium uppercase tracking-wide text-cool">
+              Verified capture time
+            </p>
+            <p className="mt-1 text-foreground">
+              {new Date(item.captured_at).toLocaleString(undefined, {
+                dateStyle: 'medium',
+                timeStyle: 'short',
+              })}
+            </p>
+            <p className="mt-1 text-xs">
+              This file's SHA-256 hash and capture time were recorded on your device before
+              upload.
+            </p>
+          </div>
+        ) : null}
+
+        {witnesses.length > 0 ? (
+          <div className="mt-4 border-t border-mist/70 pt-3">
+            <p className="text-xs font-medium uppercase tracking-wide text-cool">
+              Witnessed by
+            </p>
+            <ul className="mt-1.5 space-y-1">
+              {witnesses.map((witness) => (
+                <li key={witness.id} className="text-foreground">
+                  {witness.name}
+                  <span className="text-muted-foreground">
+                    {' '}
+                    —{' '}
+                    {new Date(witness.witnessed_at).toLocaleString(undefined, {
+                      dateStyle: 'medium',
+                      timeStyle: 'short',
+                    })}
+                  </span>{' '}
+                  {witness.status === 'confirmed' ? (
+                    <span className="text-xs text-seal">confirmed</span>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">awaiting confirmation</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
         <div className="mt-4 border-t border-mist/70 pt-3">
           <p className="text-xs font-medium uppercase tracking-wide text-cool">Recipients</p>
           {recipients.length === 0 ? (
@@ -576,7 +689,17 @@ function VaultItemCard({
           )}
         </div>
 
-        <div className="mt-4 flex justify-end border-t border-mist/70 pt-3">
+        <div className="mt-4 flex items-center justify-between border-t border-mist/70 pt-3">
+          <div className="flex items-center gap-2">
+            <RequestNotarizationDialog itemId={item.id} itemTitle={item.title} />
+            {notarizations.length > 0 ? (
+              <span className="text-xs text-muted-foreground">
+                {notarizations.some((n) => n.status === 'confirmed')
+                  ? 'acknowledged'
+                  : 'awaiting acknowledgement'}
+              </span>
+            ) : null}
+          </div>
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button
@@ -609,5 +732,110 @@ function VaultItemCard({
         </div>
       </CardContent>
     </Card>
+  )
+}
+
+function RequestNotarizationDialog({ itemId, itemTitle }: { itemId: string; itemTitle: string }) {
+  const [open, setOpen] = useState(false)
+  const [name, setName] = useState('')
+  const [contact, setContact] = useState('')
+  const [note, setNote] = useState('')
+  const [pending, setPending] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [sent, setSent] = useState(false)
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setPending(true)
+    setError(null)
+    try {
+      await requestNotarization({ data: { vaultItemId: itemId, requesterName: name, requesterContact: contact, note } })
+      setSent(true)
+    } catch {
+      setError('Could not send that request. Try again.')
+    } finally {
+      setPending(false)
+    }
+  }
+
+  function handleOpenChange(next: boolean) {
+    setOpen(next)
+    if (!next) {
+      // Reset after the close animation rather than mid-close, so the form
+      // doesn't visibly flash back to empty before the dialog is gone.
+      setTimeout(() => {
+        setName('')
+        setContact('')
+        setNote('')
+        setError(null)
+        setSent(false)
+      }, 200)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogTrigger asChild>
+        <Button variant="ghost" size="sm">
+          Request notarization
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        {sent ? (
+          <>
+            <DialogHeader>
+              <DialogTitle className="font-serif">Request sent</DialogTitle>
+              <DialogDescription>
+                We'll follow up with you directly about notarizing "{itemTitle}".
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button onClick={() => handleOpenChange(false)}>Done</Button>
+            </DialogFooter>
+          </>
+        ) : (
+          <form onSubmit={handleSubmit}>
+            <DialogHeader>
+              <DialogTitle className="font-serif">Request notarization</DialogTitle>
+              <DialogDescription>
+                Not a real notary integration yet — this sends your request to Aeterna, who'll
+                follow up about "{itemTitle}".
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="notary-name">Your name</Label>
+                <Input id="notary-name" value={name} onChange={(e) => setName(e.target.value)} required />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="notary-contact">Email or phone</Label>
+                <Input
+                  id="notary-contact"
+                  value={contact}
+                  onChange={(e) => setContact(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="notary-note">Note (optional)</Label>
+                <Textarea
+                  id="notary-note"
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  rows={3}
+                  placeholder="Anything the notary should know"
+                />
+              </div>
+              {error ? <p className="text-sm text-destructive">{error}</p> : null}
+            </div>
+            <DialogFooter>
+              <Button type="submit" disabled={pending || !name || !contact}>
+                {pending ? 'Sending…' : 'Send request'}
+              </Button>
+            </DialogFooter>
+          </form>
+        )}
+      </DialogContent>
+    </Dialog>
   )
 }

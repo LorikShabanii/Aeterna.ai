@@ -16,6 +16,8 @@ export interface VaultItemRow {
   encrypted_payload: string | null
   encrypted_file_url: string | null
   category: string | null
+  content_hash: string | null
+  captured_at: string | null
   created_at: string
 }
 
@@ -31,6 +33,38 @@ export interface RecipientRow {
 export interface VaultItemRecipientRow {
   vault_item_id: string
   recipient_id: string
+  created_at: string
+}
+
+export type WitnessStatus = 'pending' | 'confirmed'
+
+export interface VaultItemWitnessRow {
+  id: string
+  vault_item_id: string
+  name: string
+  contact: string
+  // Only set once the witness actually confirms — null while pending.
+  consent_text: string | null
+  witnessed_at: string
+  token_hash: string | null
+  status: WitnessStatus
+  confirmed_at: string | null
+  photo_url: string | null
+  created_at: string
+}
+
+export type NotarizationStatus = 'pending' | 'confirmed'
+
+export interface NotarizationRequestRow {
+  id: string
+  vault_item_id: string
+  user_id: string
+  requester_name: string
+  requester_contact: string
+  note: string
+  token_hash: string
+  status: NotarizationStatus
+  confirmed_at: string | null
   created_at: string
 }
 
@@ -83,6 +117,35 @@ export interface VaultKeyRow {
   created_at: string
 }
 
+// v1 is a single pin; a future polygon shape can share this same jsonb
+// column (e.g. `{ type: 'polygon', points: [...] }`) without a migration.
+export interface GeoBoundaryPoint {
+  type: 'point'
+  lat: number
+  lng: number
+}
+export type GeoBoundary = GeoBoundaryPoint
+
+export type LandParcelSource = 'official_cadastre' | 'official_cadastre_visual' | 'manual_pin'
+
+export interface LandParcelRow {
+  id: string
+  user_id: string
+  name: string
+  geo_boundary: GeoBoundary
+  photo_urls: string[]
+  country_code: string | null
+  cadastral_reference: string | null
+  source: LandParcelSource
+  created_at: string
+}
+
+export interface LandParcelRecipientRow {
+  land_parcel_id: string
+  recipient_id: string
+  created_at: string
+}
+
 export interface Database {
   // Required by @supabase/supabase-js's generic client machinery — without
   // it, every query result silently types as `never`. Matches what
@@ -102,6 +165,8 @@ export interface Database {
           encrypted_payload?: string | null
           encrypted_file_url?: string | null
           category?: string | null
+          content_hash?: string | null
+          captured_at?: string | null
           created_at?: string
         }
         Update: {
@@ -112,6 +177,8 @@ export interface Database {
           encrypted_payload?: string | null
           encrypted_file_url?: string | null
           category?: string | null
+          content_hash?: string | null
+          captured_at?: string | null
           created_at?: string
         }
         Relationships: []
@@ -146,6 +213,64 @@ export interface Database {
         Update: {
           vault_item_id?: string
           recipient_id?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
+      vault_item_witnesses: {
+        Row: VaultItemWitnessRow
+        Insert: {
+          id?: string
+          vault_item_id: string
+          name: string
+          contact: string
+          consent_text?: string | null
+          witnessed_at: string
+          token_hash?: string | null
+          status?: WitnessStatus
+          confirmed_at?: string | null
+          photo_url?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          vault_item_id?: string
+          name?: string
+          contact?: string
+          consent_text?: string | null
+          witnessed_at?: string
+          token_hash?: string | null
+          status?: WitnessStatus
+          confirmed_at?: string | null
+          photo_url?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
+      notarization_requests: {
+        Row: NotarizationRequestRow
+        Insert: {
+          id?: string
+          vault_item_id: string
+          user_id: string
+          requester_name: string
+          requester_contact: string
+          note?: string
+          token_hash: string
+          status?: NotarizationStatus
+          confirmed_at?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          vault_item_id?: string
+          user_id?: string
+          requester_name?: string
+          requester_contact?: string
+          note?: string
+          token_hash?: string
+          status?: NotarizationStatus
+          confirmed_at?: string | null
           created_at?: string
         }
         Relationships: []
@@ -246,6 +371,46 @@ export interface Database {
           user_id?: string
           wrapped_by_password?: string
           wrapped_by_escrow?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
+      land_parcels: {
+        Row: LandParcelRow
+        Insert: {
+          id?: string
+          user_id: string
+          name: string
+          geo_boundary: GeoBoundary
+          photo_urls?: string[]
+          country_code?: string | null
+          cadastral_reference?: string | null
+          source?: LandParcelSource
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          name?: string
+          geo_boundary?: GeoBoundary
+          photo_urls?: string[]
+          country_code?: string | null
+          cadastral_reference?: string | null
+          source?: LandParcelSource
+          created_at?: string
+        }
+        Relationships: []
+      }
+      land_parcel_recipients: {
+        Row: LandParcelRecipientRow
+        Insert: {
+          land_parcel_id: string
+          recipient_id: string
+          created_at?: string
+        }
+        Update: {
+          land_parcel_id?: string
+          recipient_id?: string
           created_at?: string
         }
         Relationships: []
